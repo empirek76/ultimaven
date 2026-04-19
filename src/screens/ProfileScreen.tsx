@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -6,12 +6,27 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  Switch,
+  Linking,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, CommonActions } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { RootStackParamList } from '../types/navigation';
+import * as Notifications from 'expo-notifications';
+import {
+  getSystemPermissionStatus,
+  enableNotifications,
+  disableNotifications,
+  requestPermissions,
+} from '../notifications/notificationService';
+
+const DECLINED_KEY = 'notifications_permission_declined';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,6 +41,9 @@ function SettingsRow({
   badgeStyle,
   onPress,
   isLast = false,
+  toggle,
+  toggleValue,
+  onToggle,
 }: {
   emoji: string;
   label: string;
@@ -33,12 +51,15 @@ function SettingsRow({
   badgeStyle?: 'grey' | 'purple';
   onPress?: () => void;
   isLast?: boolean;
+  toggle?: boolean;
+  toggleValue?: boolean;
+  onToggle?: (val: boolean) => void;
 }) {
   return (
     <TouchableOpacity
       style={[styles.row, !isLast && styles.rowBorder]}
-      activeOpacity={0.65}
-      onPress={onPress}
+      activeOpacity={toggle ? 1 : 0.65}
+      onPress={toggle ? undefined : onPress}
     >
       <Text style={styles.rowEmoji}>{emoji}</Text>
       <Text style={styles.rowLabel}>{label}</Text>
@@ -56,7 +77,17 @@ function SettingsRow({
             </Text>
           </View>
         )}
-        <Ionicons name="chevron-forward" size={18} color="#3A2A5A" />
+        {toggle ? (
+          <Switch
+            value={toggleValue}
+            onValueChange={onToggle}
+            trackColor={{ false: '#2A1850', true: '#7C5CFF' }}
+            thumbColor="#FFFFFF"
+            ios_backgroundColor="#2A1850"
+          />
+        ) : (
+          <Ionicons name="chevron-forward" size={18} color="#3A2A5A" />
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -65,7 +96,102 @@ function SettingsRow({
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function ProfileScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const [notifsEnabled, setNotifsEnabled] = useState(false);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+
+  // Read declined flag on mount — this is the source of truth for the toggle default
+  useEffect(() => {
+    (async () => {
+      const declined = await AsyncStorage.getItem(DECLINED_KEY);
+      console.log('[Profile] Mount — notifications_permission_declined:', declined);
+
+      if (declined === 'false') {
+        // User previously allowed — verify OS permission is still granted
+        const { status } = await Notifications.getPermissionsAsync();
+        console.log('[Profile] Mount — OS status:', status);
+        if (status === 'granted') {
+          setNotifsEnabled(true);
+        } else {
+          // Permission was revoked externally; reflect reality
+          await AsyncStorage.setItem(DECLINED_KEY, 'true');
+          await disableNotifications();
+          setNotifsEnabled(false);
+        }
+      } else {
+        // 'true' (declined) or null (never asked) — both show OFF
+        setNotifsEnabled(false);
+      }
+    })();
+  }, []);
+
+  // AppState listener — recheck permission when app returns from background (e.g. from Settings)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', async (nextState: AppStateStatus) => {
+      const prevState = appStateRef.current;
+      appStateRef.current = nextState;
+
+      if (prevState !== 'active' && nextState === 'active') {
+        const { status } = await Notifications.getPermissionsAsync();
+        console.log('[Profile] App foregrounded — OS permission status:', status);
+
+        if (status === 'granted') {
+          // User may have just enabled in Settings — turn toggle ON and schedule
+          await AsyncStorage.setItem(DECLINED_KEY, 'false');
+          await enableNotifications();
+          setNotifsEnabled(true);
+        } else {
+          setNotifsEnabled(false);
+        }
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
+  const showSettingsAlert = () => {
+    Alert.alert(
+      'Enable Notifications',
+      'Tap Open Settings to allow UltiMaven to send you streak reminders and motivation from Blaze.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Open Settings', onPress: () => Linking.openSettings() },
+      ]
+    );
+  };
+
+  const handleNotifToggle = async (val: boolean) => {
+    if (!val) {
+      setNotifsEnabled(false);
+      await AsyncStorage.setItem(DECLINED_KEY, 'true');
+      await disableNotifications();
+      return;
+    }
+
+    console.log('[Profile] Toggle switched ON');
+
+    const { status } = await Notifications.getPermissionsAsync();
+    console.log('[Profile] Permission status:', status);
+
+    const flag = await AsyncStorage.getItem(DECLINED_KEY);
+    console.log('[Profile] AsyncStorage flag:', flag);
+
+    // Show alert if: user previously declined in-app OR OS is anything other than "granted"
+    const shouldShowAlert = flag === 'true' || status !== 'granted';
+
+    if (!shouldShowAlert) {
+      console.log('[Profile] Scheduling notifications');
+      setNotifsEnabled(true);
+      await AsyncStorage.setItem(DECLINED_KEY, 'false');
+      await enableNotifications();
+      return;
+    }
+
+    console.log('[Profile] Showing alert now — flag:', flag, 'OS status:', status);
+    showSettingsAlert();
+    // Toggle stays OFF — setNotifsEnabled(true) never called
+  };
+
+  const openPaywall = () => navigation.navigate('Paywall', { source: 'profile' });
 
   const confirmSignOut = () => {
     Alert.alert(
@@ -124,20 +250,27 @@ export default function ProfileScreen() {
           <Text style={styles.sectionTitle}>Settings</Text>
 
           <View style={styles.settingsCard}>
-            <SettingsRow emoji="🔔" label="Notifications" />
+            <SettingsRow
+              emoji="🔔"
+              label="Notifications"
+              toggle
+              toggleValue={notifsEnabled}
+              onToggle={handleNotifToggle}
+            />
             <SettingsRow emoji="🔒" label="Privacy" />
             <SettingsRow
               emoji="💳"
               label="Subscription"
               badge="Free Plan"
               badgeStyle="grey"
+              onPress={openPaywall}
             />
             <SettingsRow emoji="⭐" label="Rate UltiMaven" />
             <SettingsRow emoji="📧" label="Contact Support" isLast />
           </View>
 
           {/* Subscription upgrade nudge */}
-          <TouchableOpacity style={styles.upgradeRow} activeOpacity={0.75}>
+          <TouchableOpacity style={styles.upgradeRow} activeOpacity={0.75} onPress={openPaywall}>
             <LinearGradient
               colors={['#7C5CFF', '#6C47FF', '#5A35FF']}
               start={{ x: 0, y: 0 }}

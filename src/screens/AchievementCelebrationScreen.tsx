@@ -13,9 +13,18 @@ import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
 import * as Haptics from 'expo-haptics';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { StackActions } from '@react-navigation/native';
 import { TracksStackParamList } from '../types/navigation';
 
 type Props = NativeStackScreenProps<TracksStackParamList, 'AchievementCelebration'>;
+
+const BLAZE_QUOTES: Record<string, string> = {
+  guitar:  "That's how a phoenix rises. Another block mastered. Keep building — your first real song is closer than you think.",
+  finance: "Money isn't complicated — discipline is. You just proved you have it. One block at a time, you're building real wealth.",
+  body:    "Your body is responding. Every rep, every lesson is rewiring you. The transformation has already begun.",
+  design:  "Great design isn't magic — it's mastery. You just took another step. The world needs more people who can make things beautiful.",
+  reading: "Speed is a skill. Comprehension is wisdom. You're building both. Keep going — your mind is your greatest asset.",
+};
 
 const { width: SW, height: SH } = Dimensions.get('window');
 
@@ -99,7 +108,7 @@ function ConfettiPiece({ piece }: { piece: typeof CONFETTI_PIECES[0] }) {
 
 // ─── Spinning rainbow badge ───────────────────────────────────────────────────
 
-function SpinningBadge() {
+function SpinningBadge({ emoji }: { emoji: string }) {
   const spinAnim  = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -131,7 +140,7 @@ function SpinningBadge() {
       </Animated.View>
       {/* Static inner dark circle with emoji */}
       <View style={styles.badgeInner}>
-        <Text style={styles.badgeEmoji}>🎸</Text>
+        <Text style={styles.badgeEmoji}>{emoji}</Text>
       </View>
     </Animated.View>
   );
@@ -177,17 +186,27 @@ function StatPill({
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 export default function AchievementCelebrationScreen({ navigation, route }: Props) {
-  const { lbId, lbTitle } = route.params;
+  const { lbId, lbTitle, lbNumber, trackId, trackEmoji, trackName, nextLbNumber, totalLBs } = route.params;
 
   const fadeAnim   = useRef(new Animated.Value(0)).current;
   const scaleAnim  = useRef(new Animated.Value(0.82)).current;
   const phoenixY   = useRef(new Animated.Value(-60)).current;
   const floatAnim  = useRef(new Animated.Value(0)).current;
   const combinedY  = Animated.add(phoenixY, floatAnim);
+  const autoTimer  = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // Pop both AchievementCelebration + LBPlayer off the stack, returning to MasteryMap
+  function handleContinue() {
+    if (autoTimer.current) clearTimeout(autoTimer.current);
+    navigation.dispatch(StackActions.pop(2));
+  }
 
   useEffect(() => {
     // Haptic celebration burst
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    // Auto-advance after 3 seconds if user doesn't tap
+    autoTimer.current = setTimeout(handleContinue, 3000);
 
     // Entrance: fade + scale + phoenix drop
     Animated.parallel([
@@ -209,6 +228,8 @@ export default function AchievementCelebrationScreen({ navigation, route }: Prop
         ])
       ).start();
     });
+
+    return () => { if (autoTimer.current) clearTimeout(autoTimer.current); };
   }, []);
 
   return (
@@ -242,7 +263,7 @@ export default function AchievementCelebrationScreen({ navigation, route }: Prop
             </Animated.Text>
 
             {/* Spinning badge */}
-            <SpinningBadge />
+            <SpinningBadge emoji={trackEmoji} />
 
             {/* "LB Mastered!" */}
             <MasteredTitle />
@@ -257,8 +278,7 @@ export default function AchievementCelebrationScreen({ navigation, route }: Prop
             <View style={styles.blazeCard}>
               <Text style={styles.blazeIcon}>🦅</Text>
               <Text style={styles.blazeQuote}>
-                "That's how a phoenix rises. G Major unlocked. Three more chords
-                and you'll be playing your first real song. Don't stop now."
+                "{BLAZE_QUOTES[trackId] ?? BLAZE_QUOTES['guitar']}"
               </Text>
             </View>
 
@@ -272,7 +292,7 @@ export default function AchievementCelebrationScreen({ navigation, route }: Prop
                 border="#352500"
               />
               <StatPill
-                value="9/28"
+                value={`${lbNumber}/${totalLBs}`}
                 label="LBs Done"
                 color="#A882FF"
                 bg="#130E28"
@@ -303,14 +323,9 @@ export default function AchievementCelebrationScreen({ navigation, route }: Prop
               <TouchableOpacity
                 style={styles.continueBtn}
                 activeOpacity={0.75}
-                onPress={() =>
-                  navigation.navigate('MasteryMap', {
-                    trackId: 'guitar',
-                    trackName: 'Guitar',
-                  })
-                }
+                onPress={handleContinue}
               >
-                <Text style={styles.continueTxt}>Continue to LB 10  →</Text>
+                <Text style={styles.continueTxt}>Continue to LB {nextLbNumber}  →</Text>
               </TouchableOpacity>
             </View>
           </Animated.View>

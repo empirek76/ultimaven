@@ -10,8 +10,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { TracksStackParamList } from '../types/navigation';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { TracksStackParamList, RootStackParamList } from '../types/navigation';
 import { getTrack, getTrackStats } from '../data/tracks';
+import { useProgress } from '../context/ProgressContext';
+
+const FREE_LB_LIMIT = 5;
 
 type Props = NativeStackScreenProps<TracksStackParamList, 'MasteryMap'>;
 
@@ -56,7 +61,20 @@ const C = {
   dimText:      '#3A2A5A',
 };
 
-// ─── Helper ────────────────────────────────────────────────────────────────
+// ─── Description template ──────────────────────────────────────────────────
+
+function makeLBDescription(trackId: string, title: string): string {
+  const map: Record<string, string> = {
+    guitar:  `Master ${title} — one of the core building blocks of guitar playing. By the end of this LB you'll play it cleanly and transition smoothly into other chords.`,
+    finance: `Understand ${title} — a key concept on your path to financial freedom. By the end of this LB you'll apply this principle directly to your own finances.`,
+    body:    `Learn ${title} — an essential part of your transformation journey. By the end of this LB you'll have the technique and knowledge to level up your training.`,
+    design:  `Explore ${title} — a foundational skill every great designer masters. By the end of this LB you'll confidently apply it in your own creative work.`,
+    reading: `Practise ${title} — a powerful technique to unlock faster comprehension. By the end of this LB you'll measurably improve your reading performance.`,
+  };
+  return map[trackId] ?? `Dive into ${title} and build your skills in this track.`;
+}
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
 
 function getPrevBlock(items: MapItem[], index: number): LearningBlock | undefined {
   for (let i = index - 1; i >= 0; i--) {
@@ -71,7 +89,7 @@ function blockLineColor(b: LearningBlock): string {
 
 // ─── Active node (pulsing glow) ────────────────────────────────────────────
 
-function ActiveNode({ id }: { id: number }) {
+function ActiveNode({ num }: { num: number }) {
   const glow = useRef(new Animated.Value(0.15)).current;
 
   useEffect(() => {
@@ -87,7 +105,7 @@ function ActiveNode({ id }: { id: number }) {
     <View style={styles.activeNodeOuter}>
       <Animated.View style={[styles.activeGlow, { opacity: glow }]} />
       <View style={styles.activeCircle}>
-        <Text style={styles.activeCircleText}>{id}</Text>
+        <Text style={styles.activeCircleText}>{num}</Text>
       </View>
     </View>
   );
@@ -95,15 +113,15 @@ function ActiveNode({ id }: { id: number }) {
 
 // ─── Node circle ───────────────────────────────────────────────────────────
 
-function NodeCircle({ block }: { block: LearningBlock }) {
+function NodeCircle({ block, displayNumber }: { block: LearningBlock; displayNumber: number }) {
   if (block.status === 'completed') {
     return (
       <View style={styles.completedNode}>
-        <Ionicons name="checkmark" size={17} color="#FFFFFF" strokeWidth={3} />
+        <Ionicons name="checkmark" size={17} color="#FFFFFF" />
       </View>
     );
   }
-  if (block.status === 'active') return <ActiveNode id={block.id} />;
+  if (block.status === 'active') return <ActiveNode num={displayNumber} />;
   return (
     <View style={styles.lockedNode}>
       <Text style={styles.lockEmoji}>🔒</Text>
@@ -113,7 +131,15 @@ function NodeCircle({ block }: { block: LearningBlock }) {
 
 // ─── LB card ───────────────────────────────────────────────────────────────
 
-function LBCard({ block, onPress }: { block: LearningBlock; onPress?: () => void }) {
+function LBCard({
+  block,
+  displayNumber,
+  onPress,
+}: {
+  block: LearningBlock;
+  displayNumber: number;
+  onPress?: () => void;
+}) {
   const done    = block.status === 'completed';
   const active  = block.status === 'active';
   const locked  = block.status === 'locked';
@@ -129,11 +155,10 @@ function LBCard({ block, onPress }: { block: LearningBlock; onPress?: () => void
         locked && styles.cardLocked,
       ]}
     >
-      {/* Top row: LB tag + title */}
       <View style={styles.cardTop}>
         <View style={[styles.lbTag, active && styles.lbTagActive, locked && styles.lbTagLocked]}>
           <Text style={[styles.lbTagTxt, active && styles.lbTagTxtActive, locked && styles.lbTagTxtLocked]}>
-            LB {block.id}
+            LB {displayNumber}
           </Text>
         </View>
         <Text style={[styles.cardTitle, locked && styles.cardTitleLocked]} numberOfLines={2}>
@@ -141,7 +166,6 @@ function LBCard({ block, onPress }: { block: LearningBlock; onPress?: () => void
         </Text>
       </View>
 
-      {/* Bottom row: status info */}
       <View style={styles.cardBottom}>
         {done && (
           <>
@@ -172,11 +196,13 @@ function LBCard({ block, onPress }: { block: LearningBlock; onPress?: () => void
 
 function BlockRow({
   block,
+  displayNumber,
   bottomLineColor,
   showBottomLine,
   onPress,
 }: {
   block: LearningBlock;
+  displayNumber: number;
   bottomLineColor: string;
   showBottomLine: boolean;
   onPress?: () => void;
@@ -184,13 +210,13 @@ function BlockRow({
   return (
     <View style={styles.mapRow}>
       <View style={styles.nodeCol}>
-        <NodeCircle block={block} />
+        <NodeCircle block={block} displayNumber={displayNumber} />
         {showBottomLine && (
           <View style={[styles.connLine, { backgroundColor: bottomLineColor }]} />
         )}
       </View>
       <View style={styles.cardCol}>
-        <LBCard block={block} onPress={onPress} />
+        <LBCard block={block} displayNumber={displayNumber} onPress={onPress} />
       </View>
     </View>
   );
@@ -232,25 +258,60 @@ function StatBadge({ value, label, color }: { value: string; label: string; colo
 // ─── Screen ────────────────────────────────────────────────────────────────
 
 export default function MasteryMapScreen({ navigation, route }: Props) {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim  = useRef(new Animated.Value(0)).current;
+  const rootNav   = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const track = getTrack(route.params.trackId);
-
-  const mapItems = useMemo((): MapItem[] => {
-    if (!track) return [];
-    const result: MapItem[] = [];
-    for (const section of track.sections) {
-      result.push({ type: 'section', label: section.label });
-      for (const block of section.blocks) {
-        result.push({ type: 'block', ...block });
-      }
-    }
-    return result;
-  }, [track]);
+  const { completedByTrack, getTrackCompletedIds } = useProgress();
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
   }, []);
+
+  const blockNumberMap = useMemo((): Map<number, number> => {
+    if (!track) return new Map();
+    const map = new Map<number, number>();
+    let n = 1;
+    for (const section of track.sections) {
+      for (const block of section.blocks) {
+        map.set(block.id, n++);
+      }
+    }
+    return map;
+  }, [track]);
+
+  const mapItems = useMemo((): MapItem[] => {
+    if (!track) return [];
+
+    const completedSet = getTrackCompletedIds(track.id);
+    const allBlocks = track.sections.flatMap((s) => s.blocks);
+
+    let foundActive = false;
+    const statusMap = new Map<number, BlockStatus>();
+    for (const block of allBlocks) {
+      if (block.status === 'completed' || completedSet.has(block.id)) {
+        statusMap.set(block.id, 'completed');
+      } else if (!foundActive) {
+        statusMap.set(block.id, 'active');
+        foundActive = true;
+      } else {
+        statusMap.set(block.id, 'locked');
+      }
+    }
+
+    const result: MapItem[] = [];
+    for (const section of track.sections) {
+      result.push({ type: 'section', label: section.label });
+      for (const block of section.blocks) {
+        result.push({
+          type: 'block',
+          ...block,
+          status: statusMap.get(block.id) ?? block.status,
+        });
+      }
+    }
+    return result;
+  }, [track, completedByTrack]);
 
   if (!track) {
     return (
@@ -261,6 +322,13 @@ export default function MasteryMapScreen({ navigation, route }: Props) {
   }
 
   const stats = getTrackStats(track);
+  const completedCount = mapItems.filter(
+    (i) => i.type === 'block' && (i as LearningBlock).status === 'completed'
+  ).length;
+  const lockedCount = mapItems.filter(
+    (i) => i.type === 'block' && (i as LearningBlock).status === 'locked'
+  ).length;
+  const mastery = stats.total > 0 ? Math.round((completedCount / stats.total) * 100) : 0;
 
   return (
     <View style={styles.container}>
@@ -291,13 +359,13 @@ export default function MasteryMapScreen({ navigation, route }: Props) {
         >
           {/* ── Progress summary ── */}
           <View style={styles.statsCard}>
-            <StatBadge value={String(stats.completed)} label="Completed" color={C.purple}  />
+            <StatBadge value={String(completedCount)} label="Completed" color={C.purple}  />
             <View style={styles.statSep} />
-            <StatBadge value={String(stats.active)}    label="Active"    color={C.gold}    />
+            <StatBadge value="1"                       label="Active"    color={C.gold}    />
             <View style={styles.statSep} />
-            <StatBadge value={String(stats.locked)}    label="Locked"    color={C.greyText}/>
+            <StatBadge value={String(lockedCount)}     label="Locked"    color={C.greyText}/>
             <View style={styles.statSep} />
-            <StatBadge value={`${stats.mastery}%`}     label="Mastery"   color={C.green}   />
+            <StatBadge value={`${mastery}%`}           label="Mastery"   color={C.green}   />
           </View>
 
           {/* ── Mastery map ── */}
@@ -318,19 +386,31 @@ export default function MasteryMapScreen({ navigation, route }: Props) {
                 );
               }
 
+              const displayNumber = blockNumberMap.get(item.id) ?? item.id;
               const bottomColor = blockLineColor(item);
               return (
                 <BlockRow
                   key={`blk-${item.id}`}
                   block={item}
+                  displayNumber={displayNumber}
                   bottomLineColor={bottomColor}
                   showBottomLine={!isLast}
-                  onPress={() =>
+                  onPress={() => {
+                    if (displayNumber > FREE_LB_LIMIT) {
+                      rootNav.navigate('Paywall', { source: 'lb_limit' });
+                      return;
+                    }
                     navigation.navigate('LearningBlockPlayer', {
-                      lbId: item.id,
-                      lbTitle: item.title,
-                    })
-                  }
+                      lbId:          item.id,
+                      lbTitle:       item.title,
+                      lbNumber:      displayNumber,
+                      lbDescription: makeLBDescription(track.id, item.title),
+                      trackId:       track.id,
+                      trackEmoji:    track.emoji,
+                      trackName:     track.name,
+                      totalLBs:      stats.total,
+                    });
+                  }}
                 />
               );
             })}
@@ -350,7 +430,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
   safe:      { flex: 1 },
 
-  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -390,7 +469,6 @@ const styles = StyleSheet.create({
 
   scrollContent: { paddingHorizontal: 20, paddingBottom: 40, paddingTop: 4 },
 
-  // Stats row
   statsCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -411,7 +489,6 @@ const styles = StyleSheet.create({
   },
   statSep: { width: 1, height: 30, backgroundColor: C.greyLine },
 
-  // Map layout
   mapContainer: {},
   mapRow: { flexDirection: 'row', alignItems: 'stretch' },
   nodeCol: {
@@ -421,7 +498,6 @@ const styles = StyleSheet.create({
   },
   cardCol: { flex: 1, paddingLeft: 10, paddingBottom: 12 },
 
-  // Section rows
   sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -444,10 +520,8 @@ const styles = StyleSheet.create({
   },
   sectionDivider: { flex: 1, height: 1, backgroundColor: C.greyLine },
 
-  // Connector line below nodes
   connLine: { flex: 1, width: 2, minHeight: 12 },
 
-  // Node circles
   completedNode: {
     width: NODE_SIZE,
     height: NODE_SIZE,
@@ -502,7 +576,6 @@ const styles = StyleSheet.create({
   },
   lockEmoji: { fontSize: 13 },
 
-  // LB cards
   card: {
     backgroundColor: C.card,
     borderRadius: 16,

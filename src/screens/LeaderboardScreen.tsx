@@ -8,6 +8,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useProgress } from '../context/ProgressContext';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -126,6 +127,7 @@ function RankRow({ item, isLast }: { item: typeof RANKS[0]; isLast: boolean }) {
 
 export default function LeaderboardScreen() {
   const [activeFilter, setActiveFilter] = useState<typeof FILTERS[number]>('Global');
+  const { totalXP } = useProgress();
 
   return (
     <View style={styles.container}>
@@ -201,15 +203,15 @@ export default function LeaderboardScreen() {
           </View>
 
           <View style={styles.yourRankRight}>
-            <Text style={styles.yourXp}>890 XP</Text>
+            <Text style={styles.yourXp}>{totalXP} XP</Text>
           </View>
 
           {/* Motivational text */}
           <View style={styles.motivationRow}>
             <Text style={styles.motivationTxt}>
-              ⚡ You're{' '}
-              <Text style={styles.motivationHighlight}>160 XP</Text>
-              {' '}away from rank 46
+              ⚡ You've earned{' '}
+              <Text style={styles.motivationHighlight}>{totalXP} XP</Text>
+              {' '}· Keep completing LBs to climb!
             </Text>
           </View>
         </View>

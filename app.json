@@ -13,7 +13,10 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSUserNotificationUsageDescription": "Blaze will remind you to keep your streak alive and celebrate your milestones."
+      }
     },
     "android": {
       "adaptiveIcon": {

@@ -5,13 +5,11 @@ import {
   ScrollView,
   StyleSheet,
   Animated,
-  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { TRACKS, getTrackStats } from '../data/tracks';
-
-const { width } = Dimensions.get('window');
+import { useProgress } from '../context/ProgressContext';
 
 // ─── Avatar ────────────────────────────────────────────────────────────────
 
@@ -31,7 +29,7 @@ function StreakCard() {
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(glowAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
+        Animated.timing(glowAnim, { toValue: 1,   duration: 1200, useNativeDriver: true }),
         Animated.timing(glowAnim, { toValue: 0.6, duration: 1200, useNativeDriver: true }),
       ])
     ).start();
@@ -60,15 +58,11 @@ function StreakCard() {
 
 // ─── Stat Pill ─────────────────────────────────────────────────────────────
 
-interface StatPillProps {
-  value: string;
-  label: string;
-  color: string;
-  bgColor: string;
-  borderColor: string;
-}
-
-function StatPill({ value, label, color, bgColor, borderColor }: StatPillProps) {
+function StatPill({
+  value, label, color, bgColor, borderColor,
+}: {
+  value: string; label: string; color: string; bgColor: string; borderColor: string;
+}) {
   return (
     <View style={[styles.statPill, { backgroundColor: bgColor, borderColor }]}>
       <Text style={[styles.statValue, { color }]}>{value}</Text>
@@ -79,7 +73,9 @@ function StatPill({ value, label, color, bgColor, borderColor }: StatPillProps) 
 
 // ─── Blaze Nudge ───────────────────────────────────────────────────────────
 
-function BlazeNudge() {
+function BlazeNudge({ lbsDone }: { lbsDone: number }) {
+  const nextMilestone = (Math.floor(lbsDone / 4) + 1) * 4;
+  const toNext = nextMilestone - lbsDone;
   return (
     <View style={styles.blazeCard}>
       <View style={styles.blazeHeader}>
@@ -88,10 +84,10 @@ function BlazeNudge() {
       </View>
       <Text style={styles.blazeMessage}>
         {"You're "}
-        <Text style={styles.blazeHighlight}>3 lessons</Text>
-        {" away from unlocking the "}
-        <Text style={styles.blazeHighlight}>Guitar Master</Text>
-        {" badge! Keep shredding! 🎸"}
+        <Text style={styles.blazeHighlight}>{toNext} LB{toNext !== 1 ? 's' : ''}</Text>
+        {" away from your next "}
+        <Text style={styles.blazeHighlight}>badge milestone</Text>
+        {"! Keep pushing! 🔥"}
       </Text>
     </View>
   );
@@ -99,31 +95,22 @@ function BlazeNudge() {
 
 // ─── Skill Track Card ──────────────────────────────────────────────────────
 
-interface TrackCardProps {
-  emoji: string;
-  name: string;
-  progress: number;
-  progressColor: string;
-  progressBg: string;
-  lessonsDone: number;
-  totalLessons: number;
-  animDelay?: number;
-}
-
 function SkillTrackCard({
-  emoji, name, progress, progressColor, progressBg,
-  lessonsDone, totalLessons, animDelay = 0,
-}: TrackCardProps) {
+  emoji, name, progress, progressColor, progressBg, lessonsDone, totalLessons, animDelay = 0,
+}: {
+  emoji: string; name: string; progress: number; progressColor: string;
+  progressBg: string; lessonsDone: number; totalLessons: number; animDelay?: number;
+}) {
   const widthAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.timing(widthAnim, {
       toValue: progress,
-      duration: 1000,
+      duration: 800,
       delay: animDelay,
       useNativeDriver: false,
     }).start();
-  }, []);
+  }, [progress]); // Re-animates bar whenever progress changes
 
   const animatedWidth = widthAnim.interpolate({
     inputRange: [0, 100],
@@ -156,12 +143,15 @@ function SkillTrackCard({
 // ─── Dashboard Screen ──────────────────────────────────────────────────────
 
 export default function DashboardScreen() {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
 
+  const { totalLBsDone, tracksActive, badges, getTrackPercent, getTrackLessonsDone } = useProgress();
+
   useEffect(() => {
+    console.log('[Dashboard] Mounted — totalLBsDone:', totalLBsDone);
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+      Animated.timing(fadeAnim,  { toValue: 1, duration: 500, useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
     ]).start();
   }, []);
@@ -189,21 +179,21 @@ export default function DashboardScreen() {
             {/* ── Stat Pills ── */}
             <View style={styles.statRow}>
               <StatPill
-                value="47"
+                value={String(totalLBsDone)}
                 label="LBs Done"
                 color="#A882FF"
                 bgColor="#130F28"
                 borderColor="#2A1A50"
               />
               <StatPill
-                value="5"
+                value={String(tracksActive)}
                 label="Tracks Active"
                 color="#FF7070"
                 bgColor="#1E0E18"
                 borderColor="#3A1A2A"
               />
               <StatPill
-                value="2"
+                value={String(badges)}
                 label="Badges"
                 color="#4ECDC4"
                 bgColor="#0C1E1C"
@@ -212,23 +202,23 @@ export default function DashboardScreen() {
             </View>
 
             {/* ── Blaze Nudge ── */}
-            <BlazeNudge />
+            <BlazeNudge lbsDone={totalLBsDone} />
 
             {/* ── Skill Tracks ── */}
             <Text style={styles.sectionTitle}>Your Skill Tracks</Text>
 
             {TRACKS.map((track, index) => {
-              const stats = getTrackStats(track);
+              const total = getTrackStats(track).total;
               return (
                 <SkillTrackCard
                   key={track.id}
                   emoji={track.emoji}
                   name={track.name}
-                  progress={stats.progress}
+                  progress={getTrackPercent(track.id)}
                   progressColor={track.progressColor}
                   progressBg={track.iconBg}
-                  lessonsDone={stats.lessonsDone}
-                  totalLessons={stats.total}
+                  lessonsDone={getTrackLessonsDone(track.id)}
+                  totalLessons={total}
                   animDelay={index * 120}
                 />
               );
@@ -252,7 +242,6 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
   },
 
-  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -272,179 +261,72 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 48, height: 48, borderRadius: 24,
+    alignItems: 'center', justifyContent: 'center',
   },
   avatarLetter: {
-    color: '#FFFFFF',
-    fontSize: 20,
+    color: '#FFFFFF', fontSize: 20,
     fontFamily: 'Poppins_700Bold',
   },
 
-  // Streak card
   streakCard: {
-    borderRadius: 22,
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
+    borderRadius: 22, padding: 20,
+    flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#2A1A4A',
+    borderWidth: 1, borderColor: '#2A1A4A',
   },
-  streakLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
+  streakLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   streakEmoji: { fontSize: 38 },
-  streakTitle: {
-    fontSize: 18,
-    color: '#FFD93D',
-    fontFamily: 'Poppins_700Bold',
-  },
-  streakSub: {
-    fontSize: 12,
-    color: '#6A5A8A',
-    fontFamily: 'Poppins_400Regular',
-    marginTop: 3,
-  },
+  streakTitle: { fontSize: 18, color: '#FFD93D', fontFamily: 'Poppins_700Bold' },
+  streakSub:   { fontSize: 12, color: '#6A5A8A', fontFamily: 'Poppins_400Regular', marginTop: 3 },
   onFireBadge: {
-    borderRadius: 20,
-    paddingHorizontal: 13,
-    paddingVertical: 7,
-    borderWidth: 1.5,
-    borderColor: '#FF9F43',
-    backgroundColor: '#1E1000',
+    borderRadius: 20, paddingHorizontal: 13, paddingVertical: 7,
+    borderWidth: 1.5, borderColor: '#FF9F43', backgroundColor: '#1E1000',
   },
-  onFireText: {
-    color: '#FF9F43',
-    fontSize: 11,
-    fontFamily: 'Poppins_600SemiBold',
-    letterSpacing: 0.8,
-  },
+  onFireText: { color: '#FF9F43', fontSize: 11, fontFamily: 'Poppins_600SemiBold', letterSpacing: 0.8 },
 
-  // Stat pills
-  statRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 14,
-  },
+  statRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
   statPill: {
-    flex: 1,
-    borderRadius: 18,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-    borderWidth: 1,
+    flex: 1, borderRadius: 18,
+    paddingVertical: 14, paddingHorizontal: 8,
+    alignItems: 'center', borderWidth: 1,
   },
-  statValue: {
-    fontSize: 20,
-    fontFamily: 'Poppins_700Bold',
-  },
+  statValue: { fontSize: 20, fontFamily: 'Poppins_700Bold' },
   statLabel: {
-    fontSize: 10.5,
-    color: '#5A4A7A',
+    fontSize: 10.5, color: '#5A4A7A',
     fontFamily: 'Poppins_400Regular',
-    marginTop: 3,
-    textAlign: 'center',
+    marginTop: 3, textAlign: 'center',
   },
 
-  // Blaze nudge
   blazeCard: {
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 24,
+    borderRadius: 20, padding: 18, marginBottom: 24,
     backgroundColor: '#0C0A1E',
-    borderWidth: 1.5,
-    borderColor: '#4A2EA0',
+    borderWidth: 1.5, borderColor: '#4A2EA0',
   },
-  blazeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 10,
-  },
-  blazeEmoji: { fontSize: 22 },
-  blazeLabel: {
-    color: '#9B7AFF',
-    fontSize: 14,
-    fontFamily: 'Poppins_600SemiBold',
-    letterSpacing: 0.2,
-  },
-  blazeMessage: {
-    color: '#C8B8E8',
-    fontSize: 14,
-    fontFamily: 'Poppins_400Regular',
-    lineHeight: 22,
-  },
-  blazeHighlight: {
-    color: '#FFD93D',
-    fontFamily: 'Poppins_600SemiBold',
-  },
+  blazeHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  blazeEmoji:  { fontSize: 22 },
+  blazeLabel:  { color: '#9B7AFF', fontSize: 14, fontFamily: 'Poppins_600SemiBold', letterSpacing: 0.2 },
+  blazeMessage: { color: '#C8B8E8', fontSize: 14, fontFamily: 'Poppins_400Regular', lineHeight: 22 },
+  blazeHighlight: { color: '#FFD93D', fontFamily: 'Poppins_600SemiBold' },
 
-  // Section title
-  sectionTitle: {
-    fontSize: 18,
-    color: '#FFFFFF',
-    fontFamily: 'Poppins_700Bold',
-    marginBottom: 14,
-  },
+  sectionTitle: { fontSize: 18, color: '#FFFFFF', fontFamily: 'Poppins_700Bold', marginBottom: 14 },
 
-  // Track cards
   trackCard: {
-    backgroundColor: '#0E0B20',
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#1C1640',
+    backgroundColor: '#0E0B20', borderRadius: 20,
+    padding: 18, marginBottom: 12,
+    borderWidth: 1, borderColor: '#1C1640',
   },
   trackRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', marginBottom: 14,
   },
-  trackLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  trackIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  trackEmoji: { fontSize: 24 },
-  trackName: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontFamily: 'Poppins_600SemiBold',
-  },
-  trackSub: {
-    color: '#5A4A7A',
-    fontSize: 11.5,
-    fontFamily: 'Poppins_400Regular',
-    marginTop: 2,
-  },
-  trackPercent: {
-    fontSize: 18,
-    fontFamily: 'Poppins_700Bold',
-  },
-  progressBg: {
-    height: 8,
-    backgroundColor: '#1A1640',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
+  trackLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  trackIconBox: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  trackEmoji:   { fontSize: 24 },
+  trackName:    { color: '#FFFFFF', fontSize: 15, fontFamily: 'Poppins_600SemiBold' },
+  trackSub:     { color: '#5A4A7A', fontSize: 11.5, fontFamily: 'Poppins_400Regular', marginTop: 2 },
+  trackPercent: { fontSize: 18, fontFamily: 'Poppins_700Bold' },
+  progressBg:   { height: 8, backgroundColor: '#1A1640', borderRadius: 4, overflow: 'hidden' },
+  progressFill: { height: '100%', borderRadius: 4 },
 });

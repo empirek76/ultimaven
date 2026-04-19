@@ -259,8 +259,9 @@ export default function OnboardingScreen({ navigation }: Props) {
       <PrimaryBtn
         label="Start Mastering Free 🔥"
         onPress={() => {
+          console.log('[Onboarding] Step 4 CTA tapped — saving onboarding_complete, navigating to NotificationPermission');
           AsyncStorage.setItem('onboarding_complete', 'true');
-          navigation.replace('Main');
+          navigation.replace('NotificationPermission');
         }}
       />
       <TouchableOpacity style={styles.signInLink} activeOpacity={0.65}>
