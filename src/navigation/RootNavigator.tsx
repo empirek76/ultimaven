@@ -7,6 +7,7 @@ import SignInScreen from '../screens/SignInScreen';
 import MainTabNavigator from './MainTabNavigator';
 import PaywallScreen from '../screens/PaywallScreen';
 import NotificationPermissionScreen from '../screens/NotificationPermissionScreen';
+import BlazeChatScreen from '../screens/BlazeChatScreen';
 import { RootStackParamList } from '../types/navigation';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -43,6 +44,11 @@ export default function RootNavigator({
         <Stack.Screen
           name="Paywall"
           component={PaywallScreen}
+          options={{ animation: 'slide_from_bottom', gestureEnabled: true }}
+        />
+        <Stack.Screen
+          name="BlazeChat"
+          component={BlazeChatScreen}
           options={{ animation: 'slide_from_bottom', gestureEnabled: true }}
         />
       </Stack.Navigator>

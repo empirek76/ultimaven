@@ -349,7 +349,17 @@ export default function MasteryMapScreen({ navigation, route }: Props) {
               <Text style={styles.headerSub}>{stats.total} Learning Blocks · {track.level}</Text>
             </View>
           </View>
-          <View style={{ width: 44 }} />
+          <TouchableOpacity
+            style={styles.blazeBtn}
+            activeOpacity={0.75}
+            onPress={() => rootNav.navigate('BlazeChat', {
+              trackId:    track.id,
+              trackName:  track.name,
+              trackEmoji: track.emoji,
+            })}
+          >
+            <Text style={styles.blazeBtnEmoji}>🦅</Text>
+          </TouchableOpacity>
         </View>
 
         <Animated.ScrollView
@@ -446,6 +456,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#2A1A5A',
   },
+  blazeBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#120E2A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#3A2070',
+  },
+  blazeBtnEmoji: { fontSize: 20 },
   headerCenter: {
     flex: 1,
     flexDirection: 'row',

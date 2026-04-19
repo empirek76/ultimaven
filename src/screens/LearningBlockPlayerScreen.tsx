@@ -9,8 +9,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { TracksStackParamList } from '../types/navigation';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackScreenProps, NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { TracksStackParamList, RootStackParamList } from '../types/navigation';
 import { useProgress } from '../context/ProgressContext';
 
 type Props = NativeStackScreenProps<TracksStackParamList, 'LearningBlockPlayer'>;
@@ -232,6 +233,7 @@ export default function LearningBlockPlayerScreen({ navigation, route }: Props) 
   const [activeTab, setActiveTab] = useState<TabName>('Practice');
   const [retryKey, setRetryKey]   = useState(0);
 
+  const rootNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { completeLB } = useProgress();
   const quiz = QUIZ_DATA[trackId] ?? QUIZ_DATA['guitar'];
 
@@ -287,6 +289,20 @@ export default function LearningBlockPlayerScreen({ navigation, route }: Props) 
             {activeTab === 'Examples' && <PlaceholderTab emoji="🎵" label="Examples coming soon" />}
 
             <View style={styles.buttons}>
+              <TouchableOpacity
+                style={styles.blazeBtn}
+                activeOpacity={0.8}
+                onPress={() => rootNav.navigate('BlazeChat', {
+                  trackId,
+                  trackName,
+                  trackEmoji,
+                  lbTitle,
+                })}
+              >
+                <Text style={styles.blazeBtnEmoji}>🦅</Text>
+                <Text style={styles.blazeBtnTxt}>Ask Blaze about this LB</Text>
+              </TouchableOpacity>
+
               <TouchableOpacity activeOpacity={0.84} onPress={handleComplete}>
                 <LinearGradient
                   colors={['#7C5CFF', '#6C47FF', '#5A35FF']}
@@ -504,6 +520,25 @@ const styles = StyleSheet.create({
   placeholderTxt: { color: '#4A3A6A', fontSize: 14, fontFamily: 'Poppins_400Regular' },
 
   buttons: { marginTop: 28, gap: 12 },
+
+  blazeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#3A2070',
+    backgroundColor: '#120E2A',
+    paddingVertical: 14,
+  },
+  blazeBtnEmoji: { fontSize: 18 },
+  blazeBtnTxt: {
+    color: '#9B7AFF',
+    fontSize: 14,
+    fontFamily: 'Poppins_600SemiBold',
+    letterSpacing: 0.2,
+  },
   primaryBtn: {
     borderRadius: 18, paddingVertical: 17, alignItems: 'center',
     shadowColor: '#7C5CFF',

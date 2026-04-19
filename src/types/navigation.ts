@@ -39,4 +39,10 @@ export type RootStackParamList = {
   NotificationPermission: undefined;
   Main: NavigatorScreenParams<MainTabParamList> | undefined;
   Paywall: { source?: 'lb_limit' | 'ai_mentor' | 'peer_review' | 'profile' } | undefined;
+  BlazeChat: {
+    trackId?: string;
+    trackName?: string;
+    trackEmoji?: string;
+    lbTitle?: string;
+  } | undefined;
 };

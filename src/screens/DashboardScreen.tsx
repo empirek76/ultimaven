@@ -5,11 +5,16 @@ import {
   ScrollView,
   StyleSheet,
   Animated,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { TRACKS, getTrackStats } from '../data/tracks';
 import { useProgress } from '../context/ProgressContext';
+import { RootStackParamList } from '../types/navigation';
 
 // ─── Avatar ────────────────────────────────────────────────────────────────
 
@@ -146,7 +151,17 @@ export default function DashboardScreen() {
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
 
+  const rootNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { totalLBsDone, tracksActive, badges, getTrackPercent, getTrackLessonsDone } = useProgress();
+
+  const openBlaze = () => {
+    const firstTrack = TRACKS[0];
+    rootNav.navigate('BlazeChat', {
+      trackId:    firstTrack?.id,
+      trackName:  firstTrack?.name,
+      trackEmoji: firstTrack?.emoji,
+    });
+  };
 
   useEffect(() => {
     console.log('[Dashboard] Mounted — totalLBsDone:', totalLBsDone);
@@ -175,6 +190,18 @@ export default function DashboardScreen() {
 
             {/* ── Streak ── */}
             <StreakCard />
+
+            {/* ── Ask Blaze ── */}
+            <TouchableOpacity style={styles.blazeBtn} activeOpacity={0.82} onPress={openBlaze}>
+              <View style={styles.blazeBtnLeft}>
+                <Text style={styles.blazeBtnEmoji}>🦅</Text>
+                <View>
+                  <Text style={styles.blazeBtnTitle}>Ask Blaze</Text>
+                  <Text style={styles.blazeBtnSub}>Your AI mastery mentor</Text>
+                </View>
+              </View>
+              <Ionicons name="arrow-forward" size={18} color="#7C5CFF" />
+            </TouchableOpacity>
 
             {/* ── Stat Pills ── */}
             <View style={styles.statRow}>
@@ -285,6 +312,23 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: '#FF9F43', backgroundColor: '#1E1000',
   },
   onFireText: { color: '#FF9F43', fontSize: 11, fontFamily: 'Poppins_600SemiBold', letterSpacing: 0.8 },
+
+  blazeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#0C0A1E',
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: '#3A2070',
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    marginBottom: 14,
+  },
+  blazeBtnLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  blazeBtnEmoji: { fontSize: 28 },
+  blazeBtnTitle: { color: '#FFFFFF', fontSize: 15, fontFamily: 'Poppins_600SemiBold' },
+  blazeBtnSub:   { color: '#5A4A7A', fontSize: 12, fontFamily: 'Poppins_400Regular', marginTop: 1 },
 
   statRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
   statPill: {
