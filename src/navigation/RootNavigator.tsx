@@ -2,6 +2,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import HomeScreen from '../screens/HomeScreen';
+import OnboardingScreen from '../screens/OnboardingScreen';
 import MainTabNavigator from './MainTabNavigator';
 import { RootStackParamList } from '../types/navigation';
 
@@ -12,6 +13,11 @@ export default function RootNavigator() {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Splash" component={HomeScreen} />
+        <Stack.Screen
+          name="Onboarding"
+          component={OnboardingScreen}
+          options={{ animation: 'fade' }}
+        />
         <Stack.Screen
           name="Main"
           component={MainTabNavigator}

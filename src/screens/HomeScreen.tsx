@@ -114,9 +114,9 @@ export default function HomeScreen({ navigation }: Props) {
   const floatAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.82)).current;
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
-    // Floating phoenix loop
     Animated.loop(
       Animated.sequence([
         Animated.timing(floatAnim, { toValue: -14, duration: 1900, useNativeDriver: true }),
@@ -124,18 +124,17 @@ export default function HomeScreen({ navigation }: Props) {
       ])
     ).start();
 
-    // Entrance animation
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 1100, useNativeDriver: true }),
       Animated.spring(scaleAnim, { toValue: 1, tension: 45, friction: 8, useNativeDriver: true }),
     ]).start();
 
-    // Auto-navigate to dashboard after 3 seconds
-    const timer = setTimeout(() => {
+    // Auto-navigate to dashboard after 3 seconds (returning user fast-path)
+    timerRef.current = setTimeout(() => {
       navigation.replace('Main');
     }, 3000);
 
-    return () => clearTimeout(timer);
+    return () => clearTimeout(timerRef.current);
   }, []);
 
   return (
@@ -185,7 +184,10 @@ export default function HomeScreen({ navigation }: Props) {
 
         {/* Buttons */}
         <Animated.View style={[styles.buttons, { opacity: fadeAnim }]}>
-          <TouchableOpacity activeOpacity={0.82} onPress={() => navigation.replace('Main')}>
+          <TouchableOpacity activeOpacity={0.82} onPress={() => {
+            clearTimeout(timerRef.current);
+            navigation.navigate('Onboarding');
+          }}>
             <LinearGradient
               colors={['#7C5CFF', '#6C47FF', '#5A35FF']}
               start={{ x: 0, y: 0 }}
