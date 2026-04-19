@@ -11,63 +11,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { TracksStackParamList } from '../types/navigation';
+import { TRACKS, getTrackStats } from '../data/tracks';
 
 type Props = NativeStackScreenProps<TracksStackParamList, 'TracksList'>;
 
-const TRACKS = [
-  {
-    id: 'guitar',
-    name: 'Guitar',
-    emoji: '🎸',
-    progress: 29,
-    color: '#FF6B6B',
-    bgColor: '#2A1018',
-    borderColor: '#3A1A22',
-    lessonsDone: 8,
-    total: 28,
-    level: 'Beginner → Advanced',
-    hasMap: true,
-  },
-  {
-    id: 'finance',
-    name: 'Personal Finance',
-    emoji: '💰',
-    progress: 50,
-    color: '#4ECDC4',
-    bgColor: '#0C201E',
-    borderColor: '#143530',
-    lessonsDone: 12,
-    total: 24,
-    level: 'Beginner → Intermediate',
-    hasMap: false,
-  },
-  {
-    id: 'body',
-    name: 'Body Transformation',
-    emoji: '💪',
-    progress: 16,
-    color: '#FF9F43',
-    bgColor: '#201508',
-    borderColor: '#2E1E08',
-    lessonsDone: 4,
-    total: 25,
-    level: 'All Levels',
-    hasMap: false,
-  },
-];
-
-function TrackCard({
-  track,
-  onPress,
-}: {
-  track: typeof TRACKS[0];
-  onPress?: () => void;
-}) {
+function TrackCard({ track, onPress }: { track: typeof TRACKS[0]; onPress: () => void }) {
+  const stats = getTrackStats(track);
   const widthAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.timing(widthAnim, {
-      toValue: track.progress,
+      toValue: stats.progress,
       duration: 1000,
       delay: 200,
       useNativeDriver: false,
@@ -76,28 +30,22 @@ function TrackCard({
 
   return (
     <TouchableOpacity
-      style={[styles.trackCard, { borderColor: track.borderColor }]}
+      style={[styles.trackCard, { borderColor: track.cardBorder }]}
       onPress={onPress}
-      activeOpacity={track.hasMap ? 0.78 : 1}
+      activeOpacity={0.78}
     >
       <View style={styles.trackCardTop}>
-        <View style={[styles.trackIconBox, { backgroundColor: track.bgColor }]}>
+        <View style={[styles.trackIconBox, { backgroundColor: track.iconBg }]}>
           <Text style={styles.trackEmoji}>{track.emoji}</Text>
         </View>
         <View style={styles.trackInfo}>
           <Text style={styles.trackName}>{track.name}</Text>
           <Text style={styles.trackLevel}>{track.level}</Text>
         </View>
-        {track.hasMap ? (
-          <View style={styles.mapBadge}>
-            <Text style={styles.mapBadgeText}>Mastery Map</Text>
-            <Ionicons name="chevron-forward" size={12} color="#9B7AFF" />
-          </View>
-        ) : (
-          <View style={styles.soonBadge}>
-            <Text style={styles.soonText}>Soon</Text>
-          </View>
-        )}
+        <View style={styles.mapBadge}>
+          <Text style={styles.mapBadgeText}>Mastery Map</Text>
+          <Ionicons name="chevron-forward" size={12} color="#9B7AFF" />
+        </View>
       </View>
 
       <View style={styles.progressRow}>
@@ -106,7 +54,7 @@ function TrackCard({
             style={[
               styles.progressFill,
               {
-                backgroundColor: track.color,
+                backgroundColor: track.progressColor,
                 width: widthAnim.interpolate({
                   inputRange: [0, 100],
                   outputRange: ['0%', '100%'],
@@ -115,10 +63,10 @@ function TrackCard({
             ]}
           />
         </View>
-        <Text style={[styles.progressPct, { color: track.color }]}>{track.progress}%</Text>
+        <Text style={[styles.progressPct, { color: track.progressColor }]}>{stats.progress}%</Text>
       </View>
       <Text style={styles.lessonCount}>
-        {track.lessonsDone}/{track.total} lessons done
+        {stats.lessonsDone}/{stats.total} lessons done
       </Text>
     </TouchableOpacity>
   );
@@ -138,10 +86,10 @@ export default function TracksScreen({ navigation }: Props) {
           <View style={styles.header}>
             <View>
               <Text style={styles.title}>My Tracks</Text>
-              <Text style={styles.subtitle}>3 active · Keep building</Text>
+              <Text style={styles.subtitle}>5 tracks · Choose your path</Text>
             </View>
             <View style={styles.headerBadge}>
-              <Text style={styles.headerBadgeText}>3</Text>
+              <Text style={styles.headerBadgeText}>5</Text>
             </View>
           </View>
 
@@ -153,14 +101,11 @@ export default function TracksScreen({ navigation }: Props) {
               <TrackCard
                 key={track.id}
                 track={track}
-                onPress={
-                  track.hasMap
-                    ? () =>
-                        navigation.navigate('MasteryMap', {
-                          trackId: track.id,
-                          trackName: track.name,
-                        })
-                    : undefined
+                onPress={() =>
+                  navigation.navigate('MasteryMap', {
+                    trackId: track.id,
+                    trackName: track.name,
+                  })
                 }
               />
             ))}
@@ -261,19 +206,6 @@ const styles = StyleSheet.create({
     color: '#9B7AFF',
     fontSize: 10,
     fontFamily: 'Poppins_600SemiBold',
-  },
-  soonBadge: {
-    backgroundColor: '#141228',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderWidth: 1,
-    borderColor: '#1E1840',
-  },
-  soonText: {
-    color: '#3A2A6A',
-    fontSize: 11,
-    fontFamily: 'Poppins_400Regular',
   },
 
   progressRow: {

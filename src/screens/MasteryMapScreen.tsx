@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,10 +11,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { TracksStackParamList } from '../types/navigation';
+import { getTrack, getTrackStats } from '../data/tracks';
 
 type Props = NativeStackScreenProps<TracksStackParamList, 'MasteryMap'>;
 
-// ─── Types & Data ──────────────────────────────────────────────────────────
+// ─── Types ─────────────────────────────────────────────────────────────────
 
 type BlockStatus = 'completed' | 'active' | 'locked';
 
@@ -33,18 +34,6 @@ interface SectionHeader {
 }
 
 type MapItem = LearningBlock | SectionHeader;
-
-const MAP_ITEMS: MapItem[] = [
-  { type: 'section', label: 'FOUNDATION' },
-  { type: 'block', id: 1, title: 'Anatomy of a Guitar',        status: 'completed', score: 95, badge: '⭐' },
-  { type: 'block', id: 2, title: 'Holding the Guitar',         status: 'completed', score: 88, badge: '⭐' },
-  { type: 'block', id: 3, title: 'Reading Chord Diagrams',     status: 'completed', score: 92, badge: '⭐' },
-  { type: 'block', id: 4, title: 'Your First Open Chord: Em',  status: 'completed', score: 91, badge: '🏅' },
-  { type: 'section', label: 'INTERMEDIATE' },
-  { type: 'block', id: 9,  title: 'Open Chord: G Major',  status: 'active' },
-  { type: 'block', id: 10, title: 'Chord Transitions',    status: 'locked' },
-  { type: 'block', id: 11, title: 'Strumming Patterns',   status: 'locked' },
-];
 
 // ─── Color constants ───────────────────────────────────────────────────────
 
@@ -69,9 +58,9 @@ const C = {
 
 // ─── Helper ────────────────────────────────────────────────────────────────
 
-function getPrevBlock(index: number): LearningBlock | undefined {
+function getPrevBlock(items: MapItem[], index: number): LearningBlock | undefined {
   for (let i = index - 1; i >= 0; i--) {
-    if (MAP_ITEMS[i].type === 'block') return MAP_ITEMS[i] as LearningBlock;
+    if (items[i].type === 'block') return items[i] as LearningBlock;
   }
   return undefined;
 }
@@ -242,12 +231,36 @@ function StatBadge({ value, label, color }: { value: string; label: string; colo
 
 // ─── Screen ────────────────────────────────────────────────────────────────
 
-export default function MasteryMapScreen({ navigation }: Props) {
+export default function MasteryMapScreen({ navigation, route }: Props) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  const track = getTrack(route.params.trackId);
+
+  const mapItems = useMemo((): MapItem[] => {
+    if (!track) return [];
+    const result: MapItem[] = [];
+    for (const section of track.sections) {
+      result.push({ type: 'section', label: section.label });
+      for (const block of section.blocks) {
+        result.push({ type: 'block', ...block });
+      }
+    }
+    return result;
+  }, [track]);
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
   }, []);
+
+  if (!track) {
+    return (
+      <View style={styles.container}>
+        <Text style={{ color: '#FFFFFF', padding: 20 }}>Track not found</Text>
+      </View>
+    );
+  }
+
+  const stats = getTrackStats(track);
 
   return (
     <View style={styles.container}>
@@ -262,10 +275,10 @@ export default function MasteryMapScreen({ navigation }: Props) {
             <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
-            <Text style={styles.headerEmoji}>🎸</Text>
+            <Text style={styles.headerEmoji}>{track.emoji}</Text>
             <View style={styles.headerTextCol}>
-              <Text style={styles.headerTitle}>Guitar Mastery</Text>
-              <Text style={styles.headerSub}>28 Learning Blocks · Beginner to Advanced</Text>
+              <Text style={styles.headerTitle}>{track.name}</Text>
+              <Text style={styles.headerSub}>{stats.total} Learning Blocks · {track.level}</Text>
             </View>
           </View>
           <View style={{ width: 44 }} />
@@ -278,20 +291,20 @@ export default function MasteryMapScreen({ navigation }: Props) {
         >
           {/* ── Progress summary ── */}
           <View style={styles.statsCard}>
-            <StatBadge value="8"   label="Completed" color={C.purple}  />
+            <StatBadge value={String(stats.completed)} label="Completed" color={C.purple}  />
             <View style={styles.statSep} />
-            <StatBadge value="1"   label="Active"    color={C.gold}    />
+            <StatBadge value={String(stats.active)}    label="Active"    color={C.gold}    />
             <View style={styles.statSep} />
-            <StatBadge value="19"  label="Locked"    color={C.greyText}/>
+            <StatBadge value={String(stats.locked)}    label="Locked"    color={C.greyText}/>
             <View style={styles.statSep} />
-            <StatBadge value="29%" label="Mastery"   color={C.green}   />
+            <StatBadge value={`${stats.mastery}%`}     label="Mastery"   color={C.green}   />
           </View>
 
           {/* ── Mastery map ── */}
           <View style={styles.mapContainer}>
-            {MAP_ITEMS.map((item, index) => {
-              const isLast  = index === MAP_ITEMS.length - 1;
-              const prevBlk = getPrevBlock(index);
+            {mapItems.map((item, index) => {
+              const isLast  = index === mapItems.length - 1;
+              const prevBlk = getPrevBlock(mapItems, index);
 
               if (item.type === 'section') {
                 const lineColor = prevBlk ? blockLineColor(prevBlk) : C.greyLine;

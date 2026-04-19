@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { TRACKS, getTrackStats } from '../data/tracks';
 
 const { width } = Dimensions.get('window');
 
@@ -195,7 +196,7 @@ export default function DashboardScreen() {
                 borderColor="#2A1A50"
               />
               <StatPill
-                value="3"
+                value="5"
                 label="Tracks Active"
                 color="#FF7070"
                 bgColor="#1E0E18"
@@ -216,36 +217,22 @@ export default function DashboardScreen() {
             {/* ── Skill Tracks ── */}
             <Text style={styles.sectionTitle}>Your Skill Tracks</Text>
 
-            <SkillTrackCard
-              emoji="🎸"
-              name="Guitar"
-              progress={29}
-              progressColor="#FF6B6B"
-              progressBg="#2A1018"
-              lessonsDone={8}
-              totalLessons={28}
-              animDelay={100}
-            />
-            <SkillTrackCard
-              emoji="💰"
-              name="Personal Finance"
-              progress={50}
-              progressColor="#4ECDC4"
-              progressBg="#0C201E"
-              lessonsDone={12}
-              totalLessons={24}
-              animDelay={220}
-            />
-            <SkillTrackCard
-              emoji="💪"
-              name="Body Transformation"
-              progress={16}
-              progressColor="#FF9F43"
-              progressBg="#201508"
-              lessonsDone={4}
-              totalLessons={25}
-              animDelay={340}
-            />
+            {TRACKS.map((track, index) => {
+              const stats = getTrackStats(track);
+              return (
+                <SkillTrackCard
+                  key={track.id}
+                  emoji={track.emoji}
+                  name={track.name}
+                  progress={stats.progress}
+                  progressColor={track.progressColor}
+                  progressBg={track.iconBg}
+                  lessonsDone={stats.lessonsDone}
+                  totalLessons={stats.total}
+                  animDelay={index * 120}
+                />
+              );
+            })}
           </ScrollView>
         </Animated.View>
       </SafeAreaView>

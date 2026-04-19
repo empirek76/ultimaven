@@ -25,11 +25,11 @@ const CARD_W = Math.floor((SW - 48 - 12) / 2); // 24px side padding × 2, 12px g
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
 const SKILLS = [
-  { id: 'guitar',  emoji: '🎸', label: 'Guitar Mastery' },
-  { id: 'finance', emoji: '💰', label: 'Personal Finance' },
-  { id: 'fitness', emoji: '💪', label: 'Body Transformation' },
-  { id: 'design',  emoji: '🎨', label: 'Graphic Design' },
-  { id: 'reading', emoji: '📖', label: 'Speed Reading' },
+  { id: 'guitar',  emoji: '🎸', label: 'Guitar Mastery',      sub: '28 LBs · Beginner–Advanced' },
+  { id: 'finance', emoji: '💰', label: 'Personal Finance',    sub: '24 LBs · Beginner–Advanced' },
+  { id: 'fitness', emoji: '💪', label: 'Body Transformation', sub: '32 LBs · All Levels' },
+  { id: 'design',  emoji: '🎨', label: 'Graphic Design',      sub: '26 LBs · Beginner–Advanced' },
+  { id: 'reading', emoji: '📖', label: 'Speed Reading',       sub: '22 LBs · Beginner–Advanced' },
 ];
 
 const TIME_OPTIONS = [
@@ -117,6 +117,7 @@ export default function OnboardingScreen({ navigation }: Props) {
               <Text style={[styles.skillLabel, selectedSkill === sk.id && styles.labelSelected]}>
                 {sk.label}
               </Text>
+              <Text style={styles.skillSub}>{sk.sub}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -132,6 +133,7 @@ export default function OnboardingScreen({ navigation }: Props) {
               <Text style={[styles.skillLabel, selectedSkill === sk.id && styles.labelSelected]}>
                 {sk.label}
               </Text>
+              <Text style={styles.skillSub}>{sk.sub}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -147,6 +149,7 @@ export default function OnboardingScreen({ navigation }: Props) {
               <Text style={[styles.skillLabel, selectedSkill === sk.id && styles.labelSelected]}>
                 {sk.label}
               </Text>
+              <Text style={styles.skillSub}>{sk.sub}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -391,6 +394,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
     paddingHorizontal: 8,
+  },
+  skillSub: {
+    color: '#3A2A5A',
+    fontSize: 9,
+    fontFamily: 'Poppins_400Regular',
+    textAlign: 'center',
+    lineHeight: 14,
+    paddingHorizontal: 4,
   },
 
   // Time options
