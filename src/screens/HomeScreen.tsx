@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Dimensions,
   SafeAreaView,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
 import Svg, {
@@ -111,28 +112,40 @@ function PhoenixMascot() {
 // ─── Splash Screen ─────────────────────────────────────────────────────────
 
 export default function HomeScreen({ navigation }: Props) {
-  const floatAnim = useRef(new Animated.Value(0)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.82)).current;
-  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const floatAnim  = useRef(new Animated.Value(0)).current;
+  const fadeAnim   = useRef(new Animated.Value(0)).current;
+  const scaleAnim  = useRef(new Animated.Value(0.82)).current;
+  const btnFade    = useRef(new Animated.Value(0)).current;
+  const timerRef   = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // null = still checking, true = returning user, false = new user
+  const [returning, setReturning] = useState<boolean | null>(null);
 
   useEffect(() => {
+    // Start phoenix float and entrance animations immediately
     Animated.loop(
       Animated.sequence([
         Animated.timing(floatAnim, { toValue: -14, duration: 1900, useNativeDriver: true }),
-        Animated.timing(floatAnim, { toValue: 0, duration: 1900, useNativeDriver: true }),
+        Animated.timing(floatAnim, { toValue: 0,   duration: 1900, useNativeDriver: true }),
       ])
     ).start();
 
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 1100, useNativeDriver: true }),
+      Animated.timing(fadeAnim,  { toValue: 1, duration: 1100, useNativeDriver: true }),
       Animated.spring(scaleAnim, { toValue: 1, tension: 45, friction: 8, useNativeDriver: true }),
     ]).start();
 
-    // Auto-navigate to dashboard after 3 seconds (returning user fast-path)
-    timerRef.current = setTimeout(() => {
-      navigation.replace('Main');
-    }, 3000);
+    // Check whether the user has already completed onboarding
+    AsyncStorage.getItem('onboarding_complete').then((val) => {
+      const done = val === 'true';
+      setReturning(done);
+      if (done) {
+        // Returning user — auto-navigate to dashboard after 3 seconds
+        timerRef.current = setTimeout(() => navigation.replace('Main'), 3000);
+      } else {
+        // New user — fade in the action buttons
+        Animated.timing(btnFade, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+      }
+    });
 
     return () => clearTimeout(timerRef.current);
   }, []);
@@ -182,30 +195,36 @@ export default function HomeScreen({ navigation }: Props) {
           </Text>
         </Animated.View>
 
-        {/* Buttons */}
-        <Animated.View style={[styles.buttons, { opacity: fadeAnim }]}>
-          <TouchableOpacity activeOpacity={0.82} onPress={() => {
-            clearTimeout(timerRef.current);
-            navigation.navigate('Onboarding');
-          }}>
-            <LinearGradient
-              colors={['#7C5CFF', '#6C47FF', '#5A35FF']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.primaryButton}
+        {/* Buttons — only visible to new users */}
+        {returning === false && (
+          <Animated.View style={[styles.buttons, { opacity: btnFade }]}>
+            <TouchableOpacity
+              activeOpacity={0.82}
+              onPress={() => navigation.navigate('Onboarding')}
             >
-              <Text style={[styles.primaryButtonText, { fontFamily: 'Poppins_600SemiBold' }]}>
-                Start Your Journey 🔥
-              </Text>
-            </LinearGradient>
-          </TouchableOpacity>
+              <LinearGradient
+                colors={['#7C5CFF', '#6C47FF', '#5A35FF']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.primaryButton}
+              >
+                <Text style={[styles.primaryButtonText, { fontFamily: 'Poppins_600SemiBold' }]}>
+                  Start Your Journey 🔥
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
 
-          <TouchableOpacity style={styles.outlineButton} activeOpacity={0.7}>
-            <Text style={[styles.outlineButtonText, { fontFamily: 'Poppins_400Regular' }]}>
-              I already have an account
-            </Text>
-          </TouchableOpacity>
-        </Animated.View>
+            <TouchableOpacity
+              style={styles.outlineButton}
+              activeOpacity={0.7}
+              onPress={() => navigation.navigate('SignIn')}
+            >
+              <Text style={[styles.outlineButtonText, { fontFamily: 'Poppins_400Regular' }]}>
+                I already have an account
+              </Text>
+            </TouchableOpacity>
+          </Animated.View>
+        )}
       </SafeAreaView>
     </LinearGradient>
   );

@@ -11,6 +11,7 @@ import {
   Platform,
   Dimensions,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -254,7 +255,10 @@ export default function OnboardingScreen({ navigation }: Props) {
       <View style={styles.spacer} />
       <PrimaryBtn
         label="Start Mastering Free 🔥"
-        onPress={() => navigation.replace('Main')}
+        onPress={() => {
+          AsyncStorage.setItem('onboarding_complete', 'true');
+          navigation.replace('Main');
+        }}
       />
       <TouchableOpacity style={styles.signInLink} activeOpacity={0.65}>
         <Text style={styles.signInTxt}>Already have an account? Sign in</Text>
