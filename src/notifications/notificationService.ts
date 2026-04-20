@@ -13,14 +13,11 @@ Notifications.setNotificationHandler({
 });
 
 export async function requestPermissions(): Promise<boolean> {
-  console.log('[notificationService] requestPermissionsAsync called');
   const { status } = await Notifications.requestPermissionsAsync();
-  console.log('[notificationService] permission status:', status);
   const granted = status === 'granted';
   if (granted) {
     await AsyncStorage.setItem(NOTIF_ENABLED_KEY, 'true');
     await scheduleAllNotifications();
-    console.log('[notificationService] All notifications scheduled');
   }
   return granted;
 }
@@ -40,13 +37,11 @@ export async function getSystemPermissionStatus(): Promise<SystemPermissionStatu
 export async function enableNotifications(): Promise<void> {
   await AsyncStorage.setItem(NOTIF_ENABLED_KEY, 'true');
   await scheduleAllNotifications();
-  console.log('[notificationService] Notifications enabled and scheduled');
 }
 
 export async function disableNotifications(): Promise<void> {
   await AsyncStorage.setItem(NOTIF_ENABLED_KEY, 'false');
   await Notifications.cancelAllScheduledNotificationsAsync();
-  console.log('[notificationService] Notifications disabled and cancelled');
 }
 
 export async function setNotificationsEnabled(enabled: boolean): Promise<void> {

@@ -16,7 +16,6 @@ export async function migrateDataVersion(): Promise<void> {
     if (stored !== DATA_VERSION) {
       await AsyncStorage.clear();
       await AsyncStorage.setItem('data_version', DATA_VERSION);
-      console.log('[progress] Data migration: cleared all AsyncStorage → version', DATA_VERSION);
     }
   } catch {}
 }
@@ -29,7 +28,6 @@ export async function clearAllProgressCache(): Promise<void> {
     const progressKeys = keys.filter((k) => k.startsWith('progress_'));
     if (progressKeys.length > 0) {
       await AsyncStorage.multiRemove(progressKeys);
-      console.log('[progress] Cleared', progressKeys.length, 'cached progress keys');
     }
   } catch {}
 }
@@ -113,8 +111,7 @@ export async function markLBCompleted(trackId: string, lbId: number, score: numb
     await supabase.rpc('increment_xp', { user_id_param: userId, xp_amount: 50 });
 
     // Save achievement record
-    console.log('[progress] Saving achievement for:', lbTitle, 'in track:', track?.name);
-    const { error: achieveErr } = await supabase.from('achievements').insert({
+    await supabase.from('achievements').insert({
       user_id:           userId,
       achievement_type:  'lb_completed',
       achievement_title: `Completed "${lbTitle}"`,
@@ -122,7 +119,6 @@ export async function markLBCompleted(trackId: string, lbId: number, score: numb
       xp_earned:         50,
       earned_at:         new Date().toISOString(),
     });
-    console.log('[progress] Achievement result:', achieveErr?.message ?? 'success');
 
     // Upsert the skill_track summary row
     const allIds = await getCompletedLBIdsLocal(trackId);

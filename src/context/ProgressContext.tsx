@@ -58,11 +58,9 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
       .from('skill_tracks')
       .select('track_key')
       .eq('user_id', user.id)
-      .then(({ data, error }) => {
-        console.log('[ProgressContext] skill_tracks query result:', JSON.stringify(data), 'error:', error?.message);
+      .then(({ data }) => {
         if (data) {
           const keys = data.map((r: { track_key: string }) => r.track_key);
-          console.log('[ProgressContext] setActiveTracks ->', keys);
           setActiveTracks(keys);
         }
       });
@@ -109,7 +107,6 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
       .eq('user_id', id);
     if (data) {
       const trackKeys = data.map((r: { track_key: string }) => r.track_key);
-      console.log('[ProgressContext] Tracks loaded from Supabase:', trackKeys);
       setActiveTracks(trackKeys);
     }
   }, [user]);
@@ -145,14 +142,9 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
 
   const getTrackPercent = useCallback((trackId: string): number => {
     const total = TRACK_TOTALS[trackId];
-    if (!total || total === 0) {
-      console.log('TRACK_TOTALS miss for trackId:', trackId, 'Available keys:', Object.keys(TRACK_TOTALS));
-      return 0;
-    }
+    if (!total || total === 0) return 0;
     const completed = getTrackCompletedIds(trackId).size;
-    const pct = Math.round((completed / total) * 100);
-    console.log('getTrackPercent:', trackId, completed, '/', total, '=', pct);
-    return pct;
+    return Math.round((completed / total) * 100);
   }, [getTrackCompletedIds]);
 
   const getTrackLessonsDone = useCallback((trackId: string): number => {

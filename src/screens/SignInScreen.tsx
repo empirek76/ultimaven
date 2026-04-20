@@ -1,12 +1,10 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   TextInput,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
@@ -19,17 +17,12 @@ import { RootStackParamList } from '../types/navigation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SignIn'>;
 
-type FocusedField = 'email' | 'password' | null;
-
 export default function SignInScreen({ navigation }: Props) {
-  const [email, setEmail]             = useState('');
-  const [password, setPassword]       = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [focused, setFocused]         = useState<FocusedField>(null);
+  const [email,    setEmail]    = useState('');
+  const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState('');
   const [passError,  setPassError]  = useState('');
   const [loading,    setLoading]    = useState(false);
-  const passwordRef                 = useRef<TextInput>(null);
 
   const handleSignIn = async () => {
     const emailBlank = !email.trim();
@@ -54,199 +47,156 @@ export default function SignInScreen({ navigation }: Props) {
   };
 
   return (
-    <View style={styles.container}>
-      {/* Background orbs */}
-      <View style={styles.orbTL} />
-      <View style={styles.orbBR} />
-      <View style={styles.orbMid} />
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#0D0D1A' }} edges={['top', 'bottom']}>
 
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      {/* Background orbs — pointerEvents="none" so they never swallow input touches */}
+      <View style={styles.orbTL} pointerEvents="none" />
+      <View style={styles.orbBR} pointerEvents="none" />
+      <View style={styles.orbMid} pointerEvents="none" />
 
-        {/* Back button */}
-        <TouchableOpacity
-          style={styles.backBtn}
-          activeOpacity={0.7}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="chevron-back" size={22} color="#7C5CFF" />
-          <Text style={styles.backTxt}>Back</Text>
-        </TouchableOpacity>
+      {/* Back button */}
+      <TouchableOpacity
+        style={styles.backBtn}
+        activeOpacity={0.7}
+        onPress={() => navigation.goBack()}
+      >
+        <Ionicons name="chevron-back" size={22} color="#7C5CFF" />
+        <Text style={styles.backTxt}>Back</Text>
+      </TouchableOpacity>
 
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <ScrollView
-            contentContainerStyle={styles.scroll}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: 'center' }}>
+
+          {/* Phoenix */}
+          <Text style={styles.phoenix}>🦅</Text>
+
+          {/* Header */}
+          <Text style={styles.title}>Welcome Back</Text>
+          <Text style={styles.subtitle}>Sign in to continue your mastery journey</Text>
+
+          {/* ── Email input ── */}
+          <View style={{ marginBottom: 16, marginTop: 32 }}>
+            <TextInput
+              value={email}
+              onChangeText={(t) => { setEmail(t); if (emailError) setEmailError(''); }}
+              placeholder="Email"
+              placeholderTextColor="#6B6B8A"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="emailAddress"
+              returnKeyType="next"
+              style={{
+                backgroundColor: '#1E1E38',
+                borderRadius: 14,
+                padding: 16,
+                color: '#FFFFFF',
+                fontSize: 16,
+                borderWidth: 1,
+                borderColor: emailError ? '#FF4444' : '#2A2A4A',
+              }}
+            />
+            {!!emailError && (
+              <Text style={styles.errorTxt}>{emailError}</Text>
+            )}
+          </View>
+
+          {/* ── Password input ── */}
+          <View style={{ marginBottom: 8 }}>
+            <TextInput
+              value={password}
+              onChangeText={(t) => { setPassword(t); if (passError) setPassError(''); }}
+              placeholder="Password"
+              placeholderTextColor="#6B6B8A"
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="password"
+              returnKeyType="done"
+              onSubmitEditing={handleSignIn}
+              style={{
+                backgroundColor: '#1E1E38',
+                borderRadius: 14,
+                padding: 16,
+                color: '#FFFFFF',
+                fontSize: 16,
+                borderWidth: 1,
+                borderColor: passError ? '#FF4444' : '#2A2A4A',
+              }}
+            />
+            {!!passError && (
+              <Text style={styles.errorTxt}>{passError}</Text>
+            )}
+          </View>
+
+          {/* Forgot password */}
+          <TouchableOpacity style={styles.forgotLink} activeOpacity={0.65}>
+            <Text style={styles.forgotTxt}>Forgot Password?</Text>
+          </TouchableOpacity>
+
+          {/* Sign In button */}
+          <TouchableOpacity
+            activeOpacity={loading ? 1 : 0.84}
+            onPress={loading ? undefined : handleSignIn}
+            style={{ marginTop: 24 }}
           >
-            {/* Phoenix */}
-            <Text style={styles.phoenix}>🦅</Text>
-
-            {/* Header */}
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>Sign in to continue your mastery journey</Text>
-
-            {/* ── Form ── */}
-            <View style={styles.form}>
-
-              {/* Email */}
-              <View>
-                <View style={[
-                  styles.inputBox,
-                  focused === 'email' && styles.inputFocused,
-                  !!emailError        && styles.inputError,
-                ]}>
-                  <Ionicons
-                    name="mail-outline"
-                    size={19}
-                    color={focused === 'email' ? '#7C5CFF' : '#4A3A6A'}
-                    style={styles.icon}
-                  />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Email"
-                    placeholderTextColor="#4A3A6A"
-                    value={email}
-                    onChangeText={(t) => { setEmail(t); if (emailError) setEmailError(''); }}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    returnKeyType="next"
-                    onFocus={() => setFocused('email')}
-                    onBlur={() =>  setFocused(null)}
-                    onSubmitEditing={() => passwordRef.current?.focus()}
-                  />
-                </View>
-                {!!emailError && (
-                  <Text style={styles.errorTxt}>
-                    <Ionicons name="alert-circle-outline" size={12} /> {emailError}
-                  </Text>
-                )}
-              </View>
-
-              {/* Password */}
-              <View>
-                <View style={[
-                  styles.inputBox,
-                  focused === 'password' && styles.inputFocused,
-                  !!passError           && styles.inputError,
-                ]}>
-                  <Ionicons
-                    name="lock-closed-outline"
-                    size={19}
-                    color={focused === 'password' ? '#7C5CFF' : '#4A3A6A'}
-                    style={styles.icon}
-                  />
-                  <TextInput
-                    ref={passwordRef}
-                    style={styles.input}
-                    placeholder="Password"
-                    placeholderTextColor="#4A3A6A"
-                    value={password}
-                    onChangeText={(t) => { setPassword(t); if (passError) setPassError(''); }}
-                    secureTextEntry={!showPassword}
-                    returnKeyType="done"
-                    onFocus={() => setFocused('password')}
-                    onBlur={() =>  setFocused(null)}
-                    onSubmitEditing={handleSignIn}
-                  />
-                  <TouchableOpacity
-                    onPress={() => setShowPassword((v) => !v)}
-                    style={styles.eyeBtn}
-                    activeOpacity={0.65}
-                  >
-                    <Ionicons
-                      name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                      size={19}
-                      color="#4A3A6A"
-                    />
-                  </TouchableOpacity>
-                </View>
-                {!!passError && (
-                  <Text style={styles.errorTxt}>
-                    <Ionicons name="alert-circle-outline" size={12} /> {passError}
-                  </Text>
-                )}
-              </View>
-
-              {/* Forgot password */}
-              <TouchableOpacity style={styles.forgotLink} activeOpacity={0.65}>
-                <Text style={styles.forgotTxt}>Forgot Password?</Text>
-              </TouchableOpacity>
-
-            </View>
-            {/* ── End form ── */}
-
-            {/* Sign In */}
-            <TouchableOpacity
-              activeOpacity={loading ? 1 : 0.84}
-              onPress={loading ? undefined : handleSignIn}
-              style={styles.signInWrap}
+            <LinearGradient
+              colors={loading ? ['#1C1230', '#1C1230', '#1C1230'] : ['#7C5CFF', '#6C47FF', '#5A35FF']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.primaryBtn}
             >
-              <LinearGradient
-                colors={loading ? ['#1C1230', '#1C1230', '#1C1230'] : ['#7C5CFF', '#6C47FF', '#5A35FF']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.primaryBtn}
-              >
-                {loading
-                  ? <ActivityIndicator color="#7C5CFF" />
-                  : <Text style={styles.primaryBtnTxt}>Sign In</Text>
-                }
-              </LinearGradient>
-            </TouchableOpacity>
+              {loading
+                ? <ActivityIndicator color="#7C5CFF" />
+                : <Text style={styles.primaryBtnTxt}>Sign In</Text>
+              }
+            </LinearGradient>
+          </TouchableOpacity>
 
-            {/* OR divider */}
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerTxt}>or</Text>
-              <View style={styles.dividerLine} />
-            </View>
+          {/* OR divider */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerTxt}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
 
-            {/* Google */}
-            <TouchableOpacity style={styles.socialBtn} activeOpacity={0.75}>
-              <Ionicons name="logo-google" size={20} color="#FFFFFF" />
-              <Text style={styles.socialTxt}>Continue with Google</Text>
-            </TouchableOpacity>
+          {/* Google */}
+          <TouchableOpacity style={styles.socialBtn} activeOpacity={0.75}>
+            <Ionicons name="logo-google" size={20} color="#FFFFFF" />
+            <Text style={styles.socialTxt}>Continue with Google</Text>
+          </TouchableOpacity>
 
-            {/* Apple */}
-            <TouchableOpacity style={[styles.socialBtn, { marginTop: 12 }]} activeOpacity={0.75}>
-              <Ionicons name="logo-apple" size={22} color="#FFFFFF" />
-              <Text style={styles.socialTxt}>Continue with Apple</Text>
-            </TouchableOpacity>
+          {/* Apple */}
+          <TouchableOpacity style={[styles.socialBtn, { marginTop: 12 }]} activeOpacity={0.75}>
+            <Ionicons name="logo-apple" size={22} color="#FFFFFF" />
+            <Text style={styles.socialTxt}>Continue with Apple</Text>
+          </TouchableOpacity>
 
-            {/* Create account link */}
-            <TouchableOpacity
-              style={styles.createLink}
-              activeOpacity={0.65}
-              onPress={() => navigation.navigate('Onboarding')}
-            >
-              <Text style={styles.createTxt}>
-                {"Don't have an account? "}
-                <Text style={styles.createHighlight}>Start for free</Text>
-              </Text>
-            </TouchableOpacity>
+          {/* Create account link */}
+          <TouchableOpacity
+            style={styles.createLink}
+            activeOpacity={0.65}
+            onPress={() => navigation.navigate('Onboarding')}
+          >
+            <Text style={styles.createTxt}>
+              {"Don't have an account? "}
+              <Text style={styles.createHighlight}>Start for free</Text>
+            </Text>
+          </TouchableOpacity>
 
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    </View>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0D0D1A' },
-  safe:      { flex: 1 },
-  scroll: {
-    flexGrow: 1,
-    paddingHorizontal: 26,
-    paddingBottom: 24,
-  },
-
   // Orbs
   orbTL: {
     position: 'absolute', width: 320, height: 320, borderRadius: 160,
@@ -300,45 +250,6 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
 
-  // Form
-  form: { marginTop: 32, gap: 14 },
-
-  inputBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#120D26',
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: '#2A1A4A',
-    paddingHorizontal: 16,
-    height: 56,
-  },
-  inputFocused: {
-    borderColor: '#7C5CFF',
-    shadowColor: '#7C5CFF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  inputError: {
-    borderColor: '#FF4444',
-    shadowColor: '#FF4444',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  icon:   { marginRight: 12 },
-  input: {
-    flex: 1,
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontFamily: 'Poppins_400Regular',
-    height: 56,
-  },
-  eyeBtn: { padding: 6 },
-
   errorTxt: {
     color: '#FF4444',
     fontSize: 12,
@@ -347,7 +258,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
 
-  forgotLink: { alignSelf: 'flex-end', marginTop: 2 },
+  forgotLink: { alignSelf: 'flex-end', marginTop: 8 },
   forgotTxt: {
     color: '#7C5CFF',
     fontSize: 13,
@@ -355,7 +266,6 @@ const styles = StyleSheet.create({
   },
 
   // Sign in button
-  signInWrap: { marginTop: 24 },
   primaryBtn: {
     borderRadius: 18,
     paddingVertical: 17,
@@ -380,11 +290,7 @@ const styles = StyleSheet.create({
     marginVertical: 24,
     gap: 12,
   },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#2A1A4A',
-  },
+  dividerLine: { flex: 1, height: 1, backgroundColor: '#2A1A4A' },
   dividerTxt: {
     color: '#4A3A6A',
     fontSize: 13,
@@ -416,6 +322,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
     marginTop: 20,
+    marginBottom: 16,
   },
   createTxt: {
     color: '#4A3A6A',

@@ -80,13 +80,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(p);
       const proValue = p?.is_pro === true;
       setIsPro(proValue);
-      console.log('[AuthContext] Profile loaded:', p?.full_name ?? '(no name)');
-      console.log('[AuthContext] is_pro from Supabase:', p?.is_pro);
-      console.log('[Auth] User Pro status:', proValue);
     } catch (err: any) {
       const msg: string = err?.message ?? '';
       const networkFail = msg.includes('Failed to fetch') || msg.includes('Network request failed') || msg.includes('ECONNREFUSED');
-      console.log('[AuthContext] Profile load error:', msg, '| networkFail:', networkFail);
       setIsNetworkError(networkFail);
       setProfile(null);
     } finally {
@@ -95,8 +91,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session: s }, error }) => {
-      console.log('[AuthContext] getSession — user:', s?.user?.email ?? 'none', '| error:', error?.message ?? 'none');
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       setLoading(false);
       if (s?.user) loadProfile(s.user.id, s.user.email);

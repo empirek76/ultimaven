@@ -52,9 +52,6 @@ const secureStorage = {
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL       ?? '';
 const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY  ?? '';
 
-console.log('[Supabase] Init — URL:', supabaseUrl ? supabaseUrl.slice(0, 40) + '…' : '⚠️  MISSING');
-console.log('[Supabase] Init — Key:', supabaseKey ? supabaseKey.slice(0, 20) + '…' : '⚠️  MISSING');
-
 export const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: {
     storage:            secureStorage,

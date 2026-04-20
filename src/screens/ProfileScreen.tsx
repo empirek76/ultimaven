@@ -110,12 +110,10 @@ export default function ProfileScreen() {
   useEffect(() => {
     (async () => {
       const declined = await AsyncStorage.getItem(DECLINED_KEY);
-      console.log('[Profile] Mount — notifications_permission_declined:', declined);
 
       if (declined === 'false') {
         // User previously allowed — verify OS permission is still granted
         const { status } = await Notifications.getPermissionsAsync();
-        console.log('[Profile] Mount — OS status:', status);
         if (status === 'granted') {
           setNotifsEnabled(true);
         } else {
@@ -139,7 +137,6 @@ export default function ProfileScreen() {
 
       if (prevState !== 'active' && nextState === 'active') {
         const { status } = await Notifications.getPermissionsAsync();
-        console.log('[Profile] App foregrounded — OS permission status:', status);
 
         if (status === 'granted') {
           // User may have just enabled in Settings — turn toggle ON and schedule
@@ -174,7 +171,6 @@ export default function ProfileScreen() {
     }
 
     const { status } = await Notifications.getPermissionsAsync();
-    console.log('[Profile] Toggle ON — OS status:', status);
 
     if (status === 'granted') {
       setNotifsEnabled(true);

@@ -243,7 +243,6 @@ export default function OnboardingScreen({ navigation }: Props) {
     // We immediately sign in with the credentials to establish a session.
     let session = data.session;
     if (!session) {
-      console.log('[Onboarding] No session from signUp — signing in immediately');
       const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
         email:    email.trim(),
         password,
@@ -259,17 +258,13 @@ export default function OnboardingScreen({ navigation }: Props) {
       session = signInData.session;
     }
 
-    console.log('[Onboarding] Session established for:', session?.user?.id);
-
     // DB trigger auto-creates the profile row. Attempt upsert as belt-and-suspenders.
     if (session?.user) {
-      const { error: profileErr } = await supabase.from('profiles').upsert({
+      await supabase.from('profiles').upsert({
         id:        session.user.id,
         full_name: name.trim(),
         email:     email.trim(),
       });
-      if (profileErr) console.log('[Onboarding] Profile upsert note:', profileErr.message);
-      else console.log('[Onboarding] Profile upsert succeeded');
 
       // Save the skill the user selected to skill_tracks
       if (selectedSkill) {
@@ -287,11 +282,7 @@ export default function OnboardingScreen({ navigation }: Props) {
           started_at:          now,
           updated_at:          now,
         });
-        if (trackErr) {
-          console.log('[Onboarding] skill_tracks insert error:', trackErr.message);
-        } else {
-          console.log('[Onboarding] skill_tracks inserted:', selectedSkill);
-        }
+        if (trackErr) { /* silently continue — user can re-add track */ }
 
         // Force-refresh activeTracks in context with the known user ID.
         // This is necessary because onAuthStateChange fires before the insert
@@ -301,7 +292,6 @@ export default function OnboardingScreen({ navigation }: Props) {
     }
 
     setIsSigningUp(false);
-    console.log("NAVIGATING TO NOTIFICATION SCREEN");
     navigation.replace('NotificationPermission');
   };
 

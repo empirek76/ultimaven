@@ -283,17 +283,12 @@ export default function MasteryMapScreen({ navigation, route }: Props) {
   const track = getTrack(route.params.trackId);
   const { completedByTrack, getTrackCompletedIds } = useProgress();
   const { isPro, user, profileLoading } = useAuth();
-  console.log('[MasteryMap] isPro value:', isPro);
 
   const [scoresMap, setScoresMap] = useState<Map<number, number>>(new Map());
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
   }, []);
-
-  useEffect(() => {
-    console.log('[MasteryMap] isPro changed to:', isPro);
-  }, [isPro]);
 
   useEffect(() => {
     if (!track || !user) return;
@@ -378,7 +373,6 @@ export default function MasteryMapScreen({ navigation, route }: Props) {
   const lockedCount = Math.max(0, stats.total - completedCount - 1);
   const masteryRaw = stats.total > 0 ? Math.round((completedCount / stats.total) * 100) : 0;
   const mastery = Number.isFinite(masteryRaw) ? masteryRaw : 0;
-  console.log('Progress percentage value:', mastery);
 
   return (
     <View style={styles.container}>
@@ -449,7 +443,6 @@ export default function MasteryMapScreen({ navigation, route }: Props) {
               const displayNumber = blockNumberMap.get(item.id) ?? item.id;
               // Never lock while profile is still loading — avoids false paywall during auth timing
               const isProLocked  = displayNumber > FREE_LB_LIMIT && !isPro && !profileLoading;
-              console.log('[MasteryMap] isPro:', isPro, 'LB number:', displayNumber, 'Should lock:', !isPro && displayNumber > FREE_LB_LIMIT && !profileLoading);
               const bottomColor  = blockLineColor(item);
               return (
                 <BlockRow

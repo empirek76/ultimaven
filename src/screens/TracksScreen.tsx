@@ -33,8 +33,6 @@ function TrackCard({
   total: number;
   onPress: () => void;
 }) {
-  console.log('Progress percentage value:', progress);
-  console.log("TRACK CARD PROGRESS:", progress, typeof progress);
   const widthAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -102,7 +100,6 @@ export default function TracksScreen({ navigation }: Props) {
   }, []);
 
   const displayTracks = TRACKS.filter((t) => activeTracks.includes(t.id));
-  console.log("TRACKS TAB DATA:", JSON.stringify(displayTracks));
   const isLoading = !authLoading && !!user && activeTracks.length === 0;
 
   return (

@@ -113,8 +113,6 @@ function SkillTrackCard({
   emoji: string; name: string; progress: number; progressColor: string;
   progressBg: string; lessonsDone: number; totalLessons: number; animDelay?: number;
 }) {
-  console.log('Progress percentage value:', progress);
-  console.log("TRACK CARD PROGRESS:", progress, typeof progress);
   const widthAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -200,7 +198,6 @@ export default function DashboardScreen() {
   };
 
   const displayTracks = TRACKS.filter((t) => activeTracks.includes(t.id));
-  console.log("HOME DASHBOARD TRACKS:", JSON.stringify(displayTracks));
 
   useEffect(() => {
     Animated.parallel([

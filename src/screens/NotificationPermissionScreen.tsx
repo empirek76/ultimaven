@@ -39,8 +39,6 @@ export default function NotificationPermissionScreen() {
   };
 
   useEffect(() => {
-    console.log('Notification screen mounted');
-    console.log("NOTIFICATION SCREEN LOADED");
     Animated.parallel([
       Animated.timing(fadeAnim,  { toValue: 1, duration: 500, useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
@@ -55,15 +53,10 @@ export default function NotificationPermissionScreen() {
   }, []);
 
   const handleAllow = async () => {
-    console.log('Requesting notification permissions now');
-    console.log("CALLING REQUEST PERMISSIONS");
     let { status } = await Notifications.requestPermissionsAsync();
-    console.log('Permission result:', status);
 
     if (status === 'undetermined') {
-      console.log('Requesting notification permissions now (retry)');
       ({ status } = await Notifications.requestPermissionsAsync());
-      console.log('Permission result (retry):', status);
     }
 
     if (status === 'granted') {
