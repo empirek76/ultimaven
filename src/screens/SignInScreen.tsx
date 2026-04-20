@@ -8,7 +8,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
+import { supabase } from '../services/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,18 +26,31 @@ export default function SignInScreen({ navigation }: Props) {
   const [password, setPassword]       = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [focused, setFocused]         = useState<FocusedField>(null);
-  const [emailError, setEmailError]   = useState('');
-  const [passError, setPassError]     = useState('');
-  const passwordRef                   = useRef<TextInput>(null);
+  const [emailError, setEmailError] = useState('');
+  const [passError,  setPassError]  = useState('');
+  const [loading,    setLoading]    = useState(false);
+  const passwordRef                 = useRef<TextInput>(null);
 
-  const handleSignIn = () => {
+  const handleSignIn = async () => {
     const emailBlank = !email.trim();
     const passBlank  = !password;
     setEmailError(emailBlank ? 'Please enter your email'    : '');
     setPassError(passBlank   ? 'Please enter your password' : '');
-    if (!emailBlank && !passBlank) {
-      navigation.replace('Main');
+    if (emailBlank || passBlank) return;
+
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({
+      email:    email.trim(),
+      password,
+    });
+    setLoading(false);
+
+    if (error) {
+      setPassError(error.message);
+      return;
     }
+
+    navigation.replace('Main');
   };
 
   return (
@@ -165,14 +180,21 @@ export default function SignInScreen({ navigation }: Props) {
             {/* ── End form ── */}
 
             {/* Sign In */}
-            <TouchableOpacity activeOpacity={0.84} onPress={handleSignIn} style={styles.signInWrap}>
+            <TouchableOpacity
+              activeOpacity={loading ? 1 : 0.84}
+              onPress={loading ? undefined : handleSignIn}
+              style={styles.signInWrap}
+            >
               <LinearGradient
-                colors={['#7C5CFF', '#6C47FF', '#5A35FF']}
+                colors={loading ? ['#1C1230', '#1C1230', '#1C1230'] : ['#7C5CFF', '#6C47FF', '#5A35FF']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.primaryBtn}
               >
-                <Text style={styles.primaryBtnTxt}>Sign In</Text>
+                {loading
+                  ? <ActivityIndicator color="#7C5CFF" />
+                  : <Text style={styles.primaryBtnTxt}>Sign In</Text>
+                }
               </LinearGradient>
             </TouchableOpacity>
 

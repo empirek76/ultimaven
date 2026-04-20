@@ -59,20 +59,20 @@ export const TRACKS: TrackData[] = [
       {
         label: 'FOUNDATION',
         blocks: [
-          { id: 1,  title: 'Anatomy of a Guitar',        status: 'completed', score: 95, badge: '⭐' },
-          { id: 2,  title: 'Holding the Guitar',         status: 'completed', score: 88, badge: '⭐' },
-          { id: 3,  title: 'Reading Chord Diagrams',     status: 'completed', score: 92, badge: '⭐' },
-          { id: 4,  title: 'Your First Open Chord: Em',  status: 'completed', score: 91, badge: '🏅' },
-          { id: 5,  title: 'Open Chord: Am',             status: 'completed', score: 87, badge: '⭐' },
-          { id: 6,  title: 'Open Chord: D Major',        status: 'completed', score: 84, badge: '⭐' },
-          { id: 7,  title: 'Basic Strumming Intro',      status: 'completed', score: 90, badge: '⭐' },
-          { id: 8,  title: 'Playing Your First Song',    status: 'completed', score: 82, badge: '🏅' },
+          { id: 1,  title: 'Anatomy of a Guitar',        status: 'active'  },
+          { id: 2,  title: 'Holding the Guitar',         status: 'locked'  },
+          { id: 3,  title: 'Reading Chord Diagrams',     status: 'locked'  },
+          { id: 4,  title: 'Your First Open Chord: Em',  status: 'locked'  },
+          { id: 5,  title: 'Open Chord: Am',             status: 'locked'  },
+          { id: 6,  title: 'Open Chord: D Major',        status: 'locked'  },
+          { id: 7,  title: 'Basic Strumming Intro',      status: 'locked'  },
+          { id: 8,  title: 'Playing Your First Song',    status: 'locked'  },
         ],
       },
       {
         label: 'INTERMEDIATE',
         blocks: [
-          { id: 9,  title: 'Open Chord: G Major',        status: 'active' },
+          { id: 9,  title: 'Open Chord: G Major',        status: 'locked' },
           { id: 10, title: 'Chord Transitions',          status: 'locked' },
           { id: 11, title: 'Strumming Patterns',         status: 'locked' },
           { id: 12, title: 'Fingerpicking Basics',       status: 'locked' },
@@ -156,7 +156,7 @@ export const TRACKS: TrackData[] = [
 
   // ── Body Transformation ───────────────────────────────────────────────────
   {
-    id: 'body',
+    id: 'fitness',
     name: 'Body Transformation',
     emoji: '💪',
     level: 'All Levels',

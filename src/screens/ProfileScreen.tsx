@@ -20,11 +20,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RootStackParamList } from '../types/navigation';
 import * as Notifications from 'expo-notifications';
 import {
-  getSystemPermissionStatus,
   enableNotifications,
   disableNotifications,
-  requestPermissions,
 } from '../notifications/notificationService';
+import { formatProDate } from '../services/stripeService';
+import { useAuth } from '../context/AuthContext';
 
 const DECLINED_KEY = 'notifications_permission_declined';
 
@@ -97,8 +97,14 @@ function SettingsRow({
 
 export default function ProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { profile, signOut } = useAuth();
   const [notifsEnabled, setNotifsEnabled] = useState(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+
+  const isPro    = profile?.is_pro   ?? false;
+  const proSince = profile?.pro_since
+    ? profile.pro_since.split('T')[0]
+    : null;
 
   // Read declined flag on mount — this is the source of truth for the toggle default
   useEffect(() => {
@@ -167,28 +173,28 @@ export default function ProfileScreen() {
       return;
     }
 
-    console.log('[Profile] Toggle switched ON');
-
     const { status } = await Notifications.getPermissionsAsync();
-    console.log('[Profile] Permission status:', status);
+    console.log('[Profile] Toggle ON — OS status:', status);
 
-    const flag = await AsyncStorage.getItem(DECLINED_KEY);
-    console.log('[Profile] AsyncStorage flag:', flag);
-
-    // Show alert if: user previously declined in-app OR OS is anything other than "granted"
-    const shouldShowAlert = flag === 'true' || status !== 'granted';
-
-    if (!shouldShowAlert) {
-      console.log('[Profile] Scheduling notifications');
+    if (status === 'granted') {
       setNotifsEnabled(true);
       await AsyncStorage.setItem(DECLINED_KEY, 'false');
       await enableNotifications();
       return;
     }
 
-    console.log('[Profile] Showing alert now — flag:', flag, 'OS status:', status);
+    if (status === 'undetermined') {
+      const { status: newStatus } = await Notifications.requestPermissionsAsync();
+      if (newStatus === 'granted') {
+        setNotifsEnabled(true);
+        await AsyncStorage.setItem(DECLINED_KEY, 'false');
+        await enableNotifications();
+      }
+      return;
+    }
+
+    // 'denied' — must go to Settings
     showSettingsAlert();
-    // Toggle stays OFF — setNotifsEnabled(true) never called
   };
 
   const openPaywall = () => navigation.navigate('Paywall', { source: 'profile' });
@@ -203,7 +209,7 @@ export default function ProfileScreen() {
           text: 'Sign Out',
           style: 'destructive',
           onPress: async () => {
-            await AsyncStorage.removeItem('onboarding_complete');
+            await signOut();
             navigation.dispatch(
               CommonActions.reset({ index: 0, routes: [{ name: 'Splash' }] })
             );
@@ -235,11 +241,25 @@ export default function ProfileScreen() {
               colors={['#7C5CFF', '#6C47FF', '#5A35FF']}
               style={styles.avatarCircle}
             >
-              <Text style={styles.avatarInitial}>S</Text>
+              <Text style={styles.avatarInitial}>
+                {(profile?.full_name ?? 'U')[0].toUpperCase()}
+              </Text>
             </LinearGradient>
 
-            <Text style={styles.userName}>Sri</Text>
-            <Text style={styles.userEmail}>empirek@gmail.com</Text>
+            <View style={styles.userNameRow}>
+              <Text style={styles.userName}>{profile?.full_name ?? 'Champion'}</Text>
+              {isPro && (
+                <View style={styles.proBadge}>
+                  <Text style={styles.proBadgeTxt}>PRO</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.userEmail}>{profile?.email ?? ''}</Text>
+            {isPro && proSince && (
+              <Text style={styles.proSinceTxt}>
+                Pro Member since {formatProDate(proSince)}
+              </Text>
+            )}
 
             <TouchableOpacity style={styles.editBtn} activeOpacity={0.72}>
               <Text style={styles.editBtnTxt}>Edit Profile</Text>
@@ -261,26 +281,48 @@ export default function ProfileScreen() {
             <SettingsRow
               emoji="💳"
               label="Subscription"
-              badge="Free Plan"
-              badgeStyle="grey"
-              onPress={openPaywall}
+              badge={isPro ? 'PRO' : 'Free Plan'}
+              badgeStyle={isPro ? 'purple' : 'grey'}
+              onPress={isPro ? undefined : openPaywall}
             />
             <SettingsRow emoji="⭐" label="Rate UltiMaven" />
             <SettingsRow emoji="📧" label="Contact Support" isLast />
           </View>
 
-          {/* Subscription upgrade nudge */}
-          <TouchableOpacity style={styles.upgradeRow} activeOpacity={0.75} onPress={openPaywall}>
-            <LinearGradient
-              colors={['#7C5CFF', '#6C47FF', '#5A35FF']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.upgradeGradient}
+          {/* Subscription banner — upgrade (free) or manage (pro) */}
+          {isPro ? (
+            <TouchableOpacity
+              style={styles.upgradeRow}
+              activeOpacity={0.75}
+              onPress={() => Alert.alert(
+                'Manage Subscription',
+                'To manage your Pro subscription, visit your account settings at ultimaven.com or contact support@ultimaven.com.',
+                [{ text: 'OK' }]
+              )}
             >
-              <Text style={styles.upgradeTxt}>⚡  Upgrade to Pro — Unlock everything</Text>
-              <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
-            </LinearGradient>
-          </TouchableOpacity>
+              <LinearGradient
+                colors={['#2A1850', '#1E1238', '#160E30']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.upgradeGradient}
+              >
+                <Text style={styles.upgradeTxt}>⭐  Pro Member — Manage Subscription</Text>
+                <Ionicons name="arrow-forward" size={16} color="#9B7AFF" />
+              </LinearGradient>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.upgradeRow} activeOpacity={0.75} onPress={openPaywall}>
+              <LinearGradient
+                colors={['#7C5CFF', '#6C47FF', '#5A35FF']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.upgradeGradient}
+              >
+                <Text style={styles.upgradeTxt}>⚡  Upgrade to Pro — Unlock everything</Text>
+                <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
 
           <View style={styles.spacer} />
 
@@ -295,6 +337,15 @@ export default function ProfileScreen() {
           </TouchableOpacity>
 
           <Text style={styles.versionTxt}>UltiMaven v1.0.0</Text>
+
+          {/* Dev: open notification settings for testing */}
+          <TouchableOpacity
+            style={styles.devBtn}
+            activeOpacity={0.5}
+            onPress={() => Linking.openSettings()}
+          >
+            <Text style={styles.devBtnTxt}>🔧 Notification Settings</Text>
+          </TouchableOpacity>
 
         </ScrollView>
       </SafeAreaView>
@@ -361,11 +412,36 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_700Bold',
     lineHeight: 44,
   },
+  userNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 2,
+  },
   userName: {
     color: '#FFFFFF',
     fontSize: 22,
     fontFamily: 'Poppins_700Bold',
     lineHeight: 30,
+  },
+  proBadge: {
+    backgroundColor: '#FFD93D',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  proBadgeTxt: {
+    color: '#1A0E00',
+    fontSize: 10,
+    fontFamily: 'Poppins_700Bold',
+    letterSpacing: 1.2,
+  },
+  proSinceTxt: {
+    color: '#5A4A7A',
+    fontSize: 12,
+    fontFamily: 'Poppins_400Regular',
+    marginTop: 2,
+    marginBottom: 18,
   },
   userEmail: {
     color: '#6A5A8A',
@@ -492,5 +568,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Poppins_400Regular',
     textAlign: 'center',
+  },
+  devBtn: {
+    alignItems: 'center',
+    paddingVertical: 10,
+    marginTop: 4,
+  },
+  devBtnTxt: {
+    color: '#2A1A4A',
+    fontSize: 11,
+    fontFamily: 'Poppins_400Regular',
   },
 });

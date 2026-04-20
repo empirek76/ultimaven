@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +14,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { TracksStackParamList } from '../types/navigation';
 import { TRACKS, getTrackStats } from '../data/tracks';
 import { useProgress } from '../context/ProgressContext';
+import { useAuth } from '../context/AuthContext';
 
 type Props = NativeStackScreenProps<TracksStackParamList, 'TracksList'>;
 
@@ -31,6 +33,8 @@ function TrackCard({
   total: number;
   onPress: () => void;
 }) {
+  console.log('Progress percentage value:', progress);
+  console.log("TRACK CARD PROGRESS:", progress, typeof progress);
   const widthAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -40,7 +44,7 @@ function TrackCard({
       delay: 200,
       useNativeDriver: false,
     }).start();
-  }, [progress]); // Re-animates when progress updates
+  }, [progress]);
 
   return (
     <TouchableOpacity
@@ -77,7 +81,9 @@ function TrackCard({
             ]}
           />
         </View>
-        <Text style={[styles.progressPct, { color: track.progressColor }]}>{progress}%</Text>
+        <Text style={styles.progressPct}>
+          {Math.round(progress)}%
+        </Text>
       </View>
       <Text style={styles.lessonCount}>{lessonsDone}/{total} lessons done</Text>
     </TouchableOpacity>
@@ -88,11 +94,16 @@ function TrackCard({
 
 export default function TracksScreen({ navigation }: Props) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const { getTrackPercent, getTrackLessonsDone } = useProgress();
+  const { getTrackPercent, getTrackLessonsDone, activeTracks } = useProgress();
+  const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
   }, []);
+
+  const displayTracks = TRACKS.filter((t) => activeTracks.includes(t.id));
+  console.log("TRACKS TAB DATA:", JSON.stringify(displayTracks));
+  const isLoading = !authLoading && !!user && activeTracks.length === 0;
 
   return (
     <View style={styles.container}>
@@ -101,36 +112,64 @@ export default function TracksScreen({ navigation }: Props) {
           <View style={styles.header}>
             <View>
               <Text style={styles.title}>My Tracks</Text>
-              <Text style={styles.subtitle}>5 tracks · Choose your path</Text>
+              <Text style={styles.subtitle}>
+                {displayTracks.length} {displayTracks.length === 1 ? 'track' : 'tracks'} · Your mastery path
+              </Text>
             </View>
             <View style={styles.headerBadge}>
-              <Text style={styles.headerBadgeText}>5</Text>
+              <Text style={styles.headerBadgeText}>{displayTracks.length}</Text>
             </View>
           </View>
 
-          <ScrollView
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {TRACKS.map((track) => {
-              const total = getTrackStats(track).total;
-              return (
-                <TrackCard
-                  key={track.id}
-                  track={track}
-                  progress={getTrackPercent(track.id)}
-                  lessonsDone={getTrackLessonsDone(track.id)}
-                  total={total}
-                  onPress={() =>
-                    navigation.navigate('MasteryMap', {
-                      trackId:   track.id,
-                      trackName: track.name,
-                    })
-                  }
-                />
-              );
-            })}
-          </ScrollView>
+          {isLoading ? (
+            <View style={styles.loadingWrap}>
+              <ActivityIndicator size="large" color="#7C5CFF" />
+            </View>
+          ) : (
+            <ScrollView
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {displayTracks.map((track) => {
+                const total = getTrackStats(track).total;
+                return (
+                  <TrackCard
+                    key={track.id}
+                    track={track}
+                    progress={getTrackPercent(track.id)}
+                    lessonsDone={getTrackLessonsDone(track.id)}
+                    total={total}
+                    onPress={() =>
+                      navigation.navigate('MasteryMap', {
+                        trackId:   track.id,
+                        trackName: track.name,
+                      })
+                    }
+                  />
+                );
+              })}
+
+              {/* Add New Skill Track card */}
+              <TouchableOpacity
+                style={styles.addCard}
+                activeOpacity={0.75}
+                onPress={() => navigation.navigate('AddTrack')}
+              >
+                <View style={styles.addCardInner}>
+                  <View style={styles.addIconBox}>
+                    <Ionicons name="add" size={28} color="#7C5CFF" />
+                  </View>
+                  <View style={styles.addTextCol}>
+                    <Text style={styles.addTitle}>Add New Skill Track</Text>
+                    <Text style={styles.addSub}>
+                      {TRACKS.length - displayTracks.length} more {TRACKS.length - displayTracks.length === 1 ? 'track' : 'tracks'} available
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#7C5CFF" />
+                </View>
+              </TouchableOpacity>
+            </ScrollView>
+          )}
         </Animated.View>
       </SafeAreaView>
     </View>
@@ -162,6 +201,8 @@ const styles = StyleSheet.create({
   },
   headerBadgeText: { color: '#7C5CFF', fontSize: 15, fontFamily: 'Poppins_700Bold' },
 
+  loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+
   scrollContent: { paddingHorizontal: 20, paddingBottom: 24 },
 
   trackCard: {
@@ -182,9 +223,34 @@ const styles = StyleSheet.create({
   },
   mapBadgeText: { color: '#9B7AFF', fontSize: 10, fontFamily: 'Poppins_600SemiBold' },
 
-  progressRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
-  progressBg: { flex: 1, height: 7, backgroundColor: '#1A1640', borderRadius: 4, overflow: 'hidden' },
+  progressRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6, overflow: 'visible' },
+  progressBg: { flex: 1, maxWidth: '70%', height: 7, backgroundColor: '#1A1640', borderRadius: 4, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 4 },
-  progressPct: { fontSize: 13, fontFamily: 'Poppins_700Bold', width: 36, textAlign: 'right' },
+  progressPct: { minWidth: 45, textAlign: 'right', paddingLeft: 4, color: '#8B6FFF', fontSize: 18, fontWeight: '800', zIndex: 10 },
   lessonCount: { color: '#4A3A6A', fontSize: 11, fontFamily: 'Poppins_400Regular' },
+
+  addCard: {
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#3A2070',
+    borderStyle: 'dashed',
+    backgroundColor: '#0C0A1E',
+    marginBottom: 14,
+    overflow: 'hidden',
+  },
+  addCardInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 18,
+    gap: 14,
+  },
+  addIconBox: {
+    width: 52, height: 52, borderRadius: 16,
+    backgroundColor: '#160E38',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: '#3A2070',
+  },
+  addTextCol: { flex: 1 },
+  addTitle: { color: '#9B7AFF', fontSize: 15, fontFamily: 'Poppins_600SemiBold' },
+  addSub:   { color: '#4A3A6A', fontSize: 11.5, fontFamily: 'Poppins_400Regular', marginTop: 2 },
 });

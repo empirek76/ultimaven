@@ -8,8 +8,8 @@ import {
   Dimensions,
   SafeAreaView,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
+import { supabase } from '../services/supabase';
 import MaskedView from '@react-native-masked-view/masked-view';
 import Svg, {
   Path,
@@ -134,11 +134,11 @@ export default function HomeScreen({ navigation }: Props) {
       Animated.spring(scaleAnim, { toValue: 1, tension: 45, friction: 8, useNativeDriver: true }),
     ]).start();
 
-    // Check whether the user has already completed onboarding
-    AsyncStorage.getItem('onboarding_complete').then((val) => {
-      const done = val === 'true';
-      setReturning(done);
-      if (done) {
+    // Check for an existing Supabase session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const hasSession = !!session;
+      setReturning(hasSession);
+      if (hasSession) {
         // Returning user — auto-navigate to dashboard after 3 seconds
         timerRef.current = setTimeout(() => navigation.replace('Main'), 3000);
       } else {

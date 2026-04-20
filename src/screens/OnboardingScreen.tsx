@@ -11,8 +11,11 @@ import {
   Platform,
   Dimensions,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { supabase } from '../services/supabase';
+import { TRACKS } from '../data/tracks';
+import { useProgress } from '../context/ProgressContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
@@ -54,12 +57,15 @@ function StepDots({ current }: { current: number }) {
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function OnboardingScreen({ navigation }: Props) {
+  const { refreshActiveTracks } = useProgress();
   const [step, setStep] = useState(1);
   const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [name, setName]             = useState('');
+  const [email, setEmail]           = useState('');
+  const [password, setPassword]     = useState('');
+  const [isSigningUp, setIsSigningUp] = useState(false);
+  const [signUpError, setSignUpError] = useState('');
 
   const fadeAnim  = useRef(new Animated.Value(1)).current;
   const floatAnim = useRef(new Animated.Value(0)).current;
@@ -213,6 +219,92 @@ export default function OnboardingScreen({ navigation }: Props) {
 
   // ─── Step 4 — Create account ────────────────────────────────────────────────
 
+  const handleSignUp = async () => {
+    if (!name.trim() || !email.trim() || !password) {
+      setSignUpError('Please fill in all fields');
+      return;
+    }
+    setIsSigningUp(true);
+    setSignUpError('');
+
+    const { data, error } = await supabase.auth.signUp({
+      email:   email.trim(),
+      password,
+      options: { data: { full_name: name.trim() } },
+    });
+
+    if (error) {
+      setSignUpError(error.message);
+      setIsSigningUp(false);
+      return;
+    }
+
+    // If email confirmation is enabled in Supabase, signUp returns session: null.
+    // We immediately sign in with the credentials to establish a session.
+    let session = data.session;
+    if (!session) {
+      console.log('[Onboarding] No session from signUp — signing in immediately');
+      const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
+        email:    email.trim(),
+        password,
+      });
+      if (signInErr) {
+        // Most likely "Email not confirmed" — tell the user to disable it in Supabase
+        setSignUpError(
+          'Please disable "Confirm email" in Supabase Dashboard → Authentication → Providers → Email, then try again.'
+        );
+        setIsSigningUp(false);
+        return;
+      }
+      session = signInData.session;
+    }
+
+    console.log('[Onboarding] Session established for:', session?.user?.id);
+
+    // DB trigger auto-creates the profile row. Attempt upsert as belt-and-suspenders.
+    if (session?.user) {
+      const { error: profileErr } = await supabase.from('profiles').upsert({
+        id:        session.user.id,
+        full_name: name.trim(),
+        email:     email.trim(),
+      });
+      if (profileErr) console.log('[Onboarding] Profile upsert note:', profileErr.message);
+      else console.log('[Onboarding] Profile upsert succeeded');
+
+      // Save the skill the user selected to skill_tracks
+      if (selectedSkill) {
+        const track = TRACKS.find((t) => t.id === selectedSkill);
+        const now = new Date().toISOString();
+        const { error: trackErr } = await supabase.from('skill_tracks').insert({
+          user_id:             session.user.id,
+          track_key:           selectedSkill,
+          track_name:          track?.name ?? selectedSkill,
+          track_emoji:         track?.emoji ?? '',
+          total_lbs:           track?.sections.flatMap((s) => s.blocks).length ?? 0,
+          completed_lbs:       0,
+          progress_percentage: 0,
+          is_active:           true,
+          started_at:          now,
+          updated_at:          now,
+        });
+        if (trackErr) {
+          console.log('[Onboarding] skill_tracks insert error:', trackErr.message);
+        } else {
+          console.log('[Onboarding] skill_tracks inserted:', selectedSkill);
+        }
+
+        // Force-refresh activeTracks in context with the known user ID.
+        // This is necessary because onAuthStateChange fires before the insert
+        // completes, so ProgressContext may have already queried an empty table.
+        await refreshActiveTracks(session.user.id);
+      }
+    }
+
+    setIsSigningUp(false);
+    console.log("NAVIGATING TO NOTIFICATION SCREEN");
+    navigation.replace('NotificationPermission');
+  };
+
   const renderStep4 = () => (
     <View style={styles.stepContent}>
       <Text style={styles.title}>Almost there!</Text>
@@ -227,7 +319,7 @@ export default function OnboardingScreen({ navigation }: Props) {
             placeholder="Full Name"
             placeholderTextColor="#4A3A6A"
             value={name}
-            onChangeText={setName}
+            onChangeText={(t) => { setName(t); if (signUpError) setSignUpError(''); }}
             autoCapitalize="words"
           />
         </View>
@@ -237,7 +329,7 @@ export default function OnboardingScreen({ navigation }: Props) {
             placeholder="Email"
             placeholderTextColor="#4A3A6A"
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(t) => { setEmail(t); if (signUpError) setSignUpError(''); }}
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
@@ -249,22 +341,37 @@ export default function OnboardingScreen({ navigation }: Props) {
             placeholder="Password"
             placeholderTextColor="#4A3A6A"
             value={password}
-            onChangeText={setPassword}
+            onChangeText={(t) => { setPassword(t); if (signUpError) setSignUpError(''); }}
             secureTextEntry
           />
         </View>
+        {!!signUpError && (
+          <Text style={styles.errorTxt}>{signUpError}</Text>
+        )}
       </View>
 
       <View style={styles.spacer} />
-      <PrimaryBtn
-        label="Start Mastering Free 🔥"
-        onPress={() => {
-          console.log('[Onboarding] Step 4 CTA tapped — saving onboarding_complete, navigating to NotificationPermission');
-          AsyncStorage.setItem('onboarding_complete', 'true');
-          navigation.replace('NotificationPermission');
-        }}
-      />
-      <TouchableOpacity style={styles.signInLink} activeOpacity={0.65}>
+      <TouchableOpacity
+        activeOpacity={isSigningUp ? 1 : 0.82}
+        onPress={isSigningUp ? undefined : handleSignUp}
+      >
+        <LinearGradient
+          colors={isSigningUp ? ['#1C1230', '#1C1230', '#1C1230'] : ['#7C5CFF', '#6C47FF', '#5A35FF']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.primaryBtn}
+        >
+          {isSigningUp
+            ? <ActivityIndicator color="#7C5CFF" />
+            : <Text style={styles.primaryBtnTxt}>Start Mastering Free 🔥</Text>
+          }
+        </LinearGradient>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.signInLink}
+        activeOpacity={0.65}
+        onPress={() => navigation.navigate('SignIn' as any)}
+      >
         <Text style={styles.signInTxt}>Already have an account? Sign in</Text>
       </TouchableOpacity>
       <StepDots current={4} />
@@ -499,6 +606,13 @@ const styles = StyleSheet.create({
     color: '#4A3A6A',
     fontSize: 14,
     fontFamily: 'Poppins_400Regular',
+  },
+  errorTxt: {
+    color: '#FF4444',
+    fontSize: 13,
+    fontFamily: 'Poppins_400Regular',
+    textAlign: 'center',
+    marginTop: 4,
   },
 
   // Step indicator

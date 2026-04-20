@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useMemo } from 'react';
+import React, { useEffect, useRef, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { TracksStackParamList, RootStackParamList } from '../types/navigation';
 import { getTrack, getTrackStats } from '../data/tracks';
 import { useProgress } from '../context/ProgressContext';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../services/supabase';
 
 const FREE_LB_LIMIT = 5;
 
@@ -134,48 +136,60 @@ function NodeCircle({ block, displayNumber }: { block: LearningBlock; displayNum
 function LBCard({
   block,
   displayNumber,
+  isProLocked,
   onPress,
 }: {
   block: LearningBlock;
   displayNumber: number;
+  isProLocked?: boolean;
   onPress?: () => void;
 }) {
-  const done    = block.status === 'completed';
-  const active  = block.status === 'active';
-  const locked  = block.status === 'locked';
+  const done   = block.status === 'completed';
+  const active = block.status === 'active';
+  const locked = block.status === 'locked';
+
+  const tappable = active || isProLocked;
 
   return (
     <TouchableOpacity
-      onPress={active ? onPress : undefined}
-      activeOpacity={active ? 0.78 : 1}
+      onPress={tappable ? onPress : undefined}
+      activeOpacity={tappable ? 0.78 : 1}
       style={[
         styles.card,
-        done   && styles.cardDone,
-        active && styles.cardActive,
-        locked && styles.cardLocked,
+        done                   && styles.cardDone,
+        active && !isProLocked && styles.cardActive,
+        locked && !isProLocked && styles.cardLocked,
+        isProLocked            && styles.cardProLocked,
       ]}
     >
       <View style={styles.cardTop}>
-        <View style={[styles.lbTag, active && styles.lbTagActive, locked && styles.lbTagLocked]}>
-          <Text style={[styles.lbTagTxt, active && styles.lbTagTxtActive, locked && styles.lbTagTxtLocked]}>
+        <View style={[styles.lbTag, active && !isProLocked && styles.lbTagActive, locked && styles.lbTagLocked]}>
+          <Text style={[styles.lbTagTxt, active && !isProLocked && styles.lbTagTxtActive, locked && styles.lbTagTxtLocked]}>
             LB {displayNumber}
           </Text>
         </View>
-        <Text style={[styles.cardTitle, locked && styles.cardTitleLocked]} numberOfLines={2}>
+        <Text style={[styles.cardTitle, (locked || isProLocked) && styles.cardTitleLocked]} numberOfLines={2}>
           {block.title}
         </Text>
+        {isProLocked && (
+          <View style={styles.proLockBadge}>
+            <Text style={styles.proLockTxt}>PRO</Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.cardBottom}>
         {done && (
           <>
             <View style={styles.scorePill}>
-              <Text style={styles.scoreText}>{block.score}%</Text>
+              <Text style={styles.scoreText}>
+                {block.score != null && !isNaN(block.score) ? `${Math.round(block.score)}%` : '100%'}
+              </Text>
             </View>
             <Text style={styles.badgeEmoji}>{block.badge}</Text>
           </>
         )}
-        {active && (
+        {active && !isProLocked && (
           <>
             <View style={styles.inProgressDot} />
             <Text style={styles.inProgressTxt}>In progress</Text>
@@ -184,7 +198,10 @@ function LBCard({
             </View>
           </>
         )}
-        {locked && (
+        {isProLocked && (
+          <Text style={styles.proLockedTxt}>Unlock with Pro 🔒</Text>
+        )}
+        {locked && !isProLocked && (
           <Text style={styles.lockedTxt}>Locked · Complete previous lessons</Text>
         )}
       </View>
@@ -197,12 +214,14 @@ function LBCard({
 function BlockRow({
   block,
   displayNumber,
+  isProLocked,
   bottomLineColor,
   showBottomLine,
   onPress,
 }: {
   block: LearningBlock;
   displayNumber: number;
+  isProLocked?: boolean;
   bottomLineColor: string;
   showBottomLine: boolean;
   onPress?: () => void;
@@ -216,7 +235,7 @@ function BlockRow({
         )}
       </View>
       <View style={styles.cardCol}>
-        <LBCard block={block} displayNumber={displayNumber} onPress={onPress} />
+        <LBCard block={block} displayNumber={displayNumber} isProLocked={isProLocked} onPress={onPress} />
       </View>
     </View>
   );
@@ -263,10 +282,37 @@ export default function MasteryMapScreen({ navigation, route }: Props) {
 
   const track = getTrack(route.params.trackId);
   const { completedByTrack, getTrackCompletedIds } = useProgress();
+  const { isPro, user, profileLoading } = useAuth();
+  console.log('[MasteryMap] isPro value:', isPro);
+
+  const [scoresMap, setScoresMap] = useState<Map<number, number>>(new Map());
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
   }, []);
+
+  useEffect(() => {
+    console.log('[MasteryMap] isPro changed to:', isPro);
+  }, [isPro]);
+
+  useEffect(() => {
+    if (!track || !user) return;
+    supabase
+      .from('learning_blocks')
+      .select('lb_number, score')
+      .eq('user_id', user.id)
+      .eq('track_key', track.id)
+      .eq('is_completed', true)
+      .then(({ data }) => {
+        if (data) {
+          const map = new Map<number, number>();
+          data.forEach((r: { lb_number: number; score: number | null }) => {
+            map.set(r.lb_number, r.score ?? 100);
+          });
+          setScoresMap(map);
+        }
+      });
+  }, [track?.id, user?.id]);
 
   const blockNumberMap = useMemo((): Map<number, number> => {
     if (!track) return new Map();
@@ -289,7 +335,7 @@ export default function MasteryMapScreen({ navigation, route }: Props) {
     let foundActive = false;
     const statusMap = new Map<number, BlockStatus>();
     for (const block of allBlocks) {
-      if (block.status === 'completed' || completedSet.has(block.id)) {
+      if (completedSet.has(block.id)) {
         statusMap.set(block.id, 'completed');
       } else if (!foundActive) {
         statusMap.set(block.id, 'active');
@@ -307,11 +353,12 @@ export default function MasteryMapScreen({ navigation, route }: Props) {
           type: 'block',
           ...block,
           status: statusMap.get(block.id) ?? block.status,
+          score:  scoresMap.get(block.id),
         });
       }
     }
     return result;
-  }, [track, completedByTrack]);
+  }, [track, completedByTrack, scoresMap]);
 
   if (!track) {
     return (
@@ -321,14 +368,17 @@ export default function MasteryMapScreen({ navigation, route }: Props) {
     );
   }
 
+  const safePercent = (val: number | null | undefined) =>
+    `${!val || isNaN(val) ? 0 : Math.round(val)}%`;
+
   const stats = getTrackStats(track);
   const completedCount = mapItems.filter(
     (i) => i.type === 'block' && (i as LearningBlock).status === 'completed'
   ).length;
-  const lockedCount = mapItems.filter(
-    (i) => i.type === 'block' && (i as LearningBlock).status === 'locked'
-  ).length;
-  const mastery = stats.total > 0 ? Math.round((completedCount / stats.total) * 100) : 0;
+  const lockedCount = Math.max(0, stats.total - completedCount - 1);
+  const masteryRaw = stats.total > 0 ? Math.round((completedCount / stats.total) * 100) : 0;
+  const mastery = Number.isFinite(masteryRaw) ? masteryRaw : 0;
+  console.log('Progress percentage value:', mastery);
 
   return (
     <View style={styles.container}>
@@ -375,7 +425,7 @@ export default function MasteryMapScreen({ navigation, route }: Props) {
             <View style={styles.statSep} />
             <StatBadge value={String(lockedCount)}     label="Locked"    color={C.greyText}/>
             <View style={styles.statSep} />
-            <StatBadge value={`${mastery}%`}           label="Mastery"   color={C.green}   />
+            <StatBadge value={safePercent(mastery)}     label="Mastery"   color={C.green}   />
           </View>
 
           {/* ── Mastery map ── */}
@@ -397,16 +447,20 @@ export default function MasteryMapScreen({ navigation, route }: Props) {
               }
 
               const displayNumber = blockNumberMap.get(item.id) ?? item.id;
-              const bottomColor = blockLineColor(item);
+              // Never lock while profile is still loading — avoids false paywall during auth timing
+              const isProLocked  = displayNumber > FREE_LB_LIMIT && !isPro && !profileLoading;
+              console.log('[MasteryMap] isPro:', isPro, 'LB number:', displayNumber, 'Should lock:', !isPro && displayNumber > FREE_LB_LIMIT && !profileLoading);
+              const bottomColor  = blockLineColor(item);
               return (
                 <BlockRow
                   key={`blk-${item.id}`}
                   block={item}
                   displayNumber={displayNumber}
+                  isProLocked={isProLocked}
                   bottomLineColor={bottomColor}
                   showBottomLine={!isLast}
                   onPress={() => {
-                    if (displayNumber > FREE_LB_LIMIT) {
+                    if (isProLocked) {
                       rootNav.navigate('Paywall', { source: 'lb_limit' });
                       return;
                     }
@@ -619,6 +673,31 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   cardLocked: { opacity: 0.52 },
+  cardProLocked: {
+    borderColor: '#3A2080',
+    borderWidth: 1,
+    opacity: 0.85,
+  },
+  proLockBadge: {
+    backgroundColor: '#3A1A8A',
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: C.purpleBorder,
+    alignSelf: 'flex-start',
+  },
+  proLockTxt: {
+    color: C.purpleLight,
+    fontSize: 9,
+    fontFamily: 'Poppins_700Bold',
+    letterSpacing: 0.5,
+  },
+  proLockedTxt: {
+    color: C.purpleLight,
+    fontSize: 11,
+    fontFamily: 'Poppins_600SemiBold',
+  },
 
   cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
 

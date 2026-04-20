@@ -5,14 +5,17 @@ import {
   StyleSheet,
   TouchableOpacity,
   Animated,
+  Linking,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
 import { RootStackParamList } from '../types/navigation';
-import { requestPermissions } from '../notifications/notificationService';
+import { enableNotifications } from '../notifications/notificationService';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -25,12 +28,19 @@ const BENEFITS = [
 
 export default function NotificationPermissionScreen() {
   const navigation = useNavigation<Nav>();
-  const fadeAnim  = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
-  const blazeAnim = useRef(new Animated.Value(0.8)).current;
+  const fadeAnim   = useRef(new Animated.Value(0)).current;
+  const slideAnim  = useRef(new Animated.Value(30)).current;
+  const blazeAnim  = useRef(new Animated.Value(0.8)).current;
+
+  const goToMain = () => {
+    navigation.dispatch(
+      CommonActions.reset({ index: 0, routes: [{ name: 'Main' }] })
+    );
+  };
 
   useEffect(() => {
-    console.log('[NotificationPermission] Screen mounted — showing pre-permission UI');
+    console.log('Notification screen mounted');
+    console.log("NOTIFICATION SCREEN LOADED");
     Animated.parallel([
       Animated.timing(fadeAnim,  { toValue: 1, duration: 500, useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
@@ -44,24 +54,36 @@ export default function NotificationPermissionScreen() {
     ).start();
   }, []);
 
-  const goToMain = () => {
-    console.log('[NotificationPermission] Navigating to Main');
-    navigation.dispatch(
-      CommonActions.reset({ index: 0, routes: [{ name: 'Main' }] })
+  const handleAllow = async () => {
+    console.log('Requesting notification permissions now');
+    console.log("CALLING REQUEST PERMISSIONS");
+    let { status } = await Notifications.requestPermissionsAsync();
+    console.log('Permission result:', status);
+
+    if (status === 'undetermined') {
+      console.log('Requesting notification permissions now (retry)');
+      ({ status } = await Notifications.requestPermissionsAsync());
+      console.log('Permission result (retry):', status);
+    }
+
+    if (status === 'granted') {
+      await AsyncStorage.setItem('notifications_permission_declined', 'false');
+      await enableNotifications();
+      goToMain();
+      return;
+    }
+
+    Alert.alert(
+      'Enable Notifications',
+      'To enable notifications, go to iPhone Settings → UltiMaven → Notifications → Allow Notifications.',
+      [
+        { text: 'Skip for now', onPress: () => goToMain() },
+        { text: 'Open iPhone Settings', onPress: () => Linking.openSettings() },
+      ]
     );
   };
 
-  const handleAllow = async () => {
-    console.log('[NotificationPermission] "Allow Notifications" tapped — requesting OS permission');
-    const granted = await requestPermissions();
-    console.log('[NotificationPermission] Permission result:', granted ? 'GRANTED' : 'DENIED');
-    // Store result so Profile toggle knows the user's choice
-    await AsyncStorage.setItem('notifications_permission_declined', granted ? 'false' : 'true');
-    goToMain();
-  };
-
   const handleLater = async () => {
-    console.log('[NotificationPermission] "Maybe Later" tapped — storing decline flag');
     await AsyncStorage.setItem('notifications_permission_declined', 'true');
     goToMain();
   };
@@ -99,7 +121,7 @@ export default function NotificationPermissionScreen() {
 
           <View style={styles.spacer} />
 
-          {/* CTA */}
+          {/* Primary CTA */}
           <TouchableOpacity
             style={styles.allowBtn}
             activeOpacity={0.82}
@@ -167,10 +189,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
 
-  benefitsList: {
-    width: '100%',
-    gap: 14,
-  },
+  benefitsList: { width: '100%', gap: 14 },
   benefitRow: {
     flexDirection: 'row',
     alignItems: 'center',

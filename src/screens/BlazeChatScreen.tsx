@@ -20,6 +20,7 @@ import { RootStackParamList } from '../types/navigation';
 import { useProgress } from '../context/ProgressContext';
 import { TRACKS } from '../data/tracks';
 import { askBlaze, ApiMessage, UserContext } from '../services/aiMentor';
+import { supabase } from '../services/supabase';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BlazeChat'>;
 
@@ -175,6 +176,20 @@ export default function BlazeChatScreen({ route }: Props) {
 
     try {
       const reply = await askBlaze(trimmed, ctx, apiHistory.current);
+
+      // Persist conversation to Supabase (fire-and-forget)
+      void (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+            await supabase.from('blaze_conversations').insert({
+              user_id:  session.user.id,
+              message:  trimmed,
+              response: reply,
+            });
+          }
+        } catch {}
+      })();
 
       // Update rolling API history (keep last 10 turns to stay within token limits)
       apiHistory.current = [

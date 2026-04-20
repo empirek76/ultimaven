@@ -186,7 +186,8 @@ function StatPill({
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 export default function AchievementCelebrationScreen({ navigation, route }: Props) {
-  const { lbId, lbTitle, lbNumber, trackId, trackEmoji, trackName, nextLbNumber, totalLBs } = route.params;
+  const { lbId, lbTitle, lbNumber, trackId, trackEmoji, trackName, nextLbNumber, totalLBs, score } = route.params;
+  const displayScore = score != null && !isNaN(score) ? Math.round(score) : 100;
 
   const fadeAnim   = useRef(new Animated.Value(0)).current;
   const scaleAnim  = useRef(new Animated.Value(0.82)).current;
@@ -272,7 +273,7 @@ export default function AchievementCelebrationScreen({ navigation, route }: Prop
             <Text style={styles.conqueredLine}>
               You've conquered {lbTitle}
             </Text>
-            <Text style={styles.metaLine}>Score: 92% · Time: 18 minutes</Text>
+            <Text style={styles.metaLine}>Score: {displayScore}% · LB Complete</Text>
 
             {/* Blaze message */}
             <View style={styles.blazeCard}>

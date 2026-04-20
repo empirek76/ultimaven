@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Animated,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,21 +15,23 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { TRACKS, getTrackStats } from '../data/tracks';
 import { useProgress } from '../context/ProgressContext';
+import { useAuth } from '../context/AuthContext';
 import { RootStackParamList } from '../types/navigation';
+import { CommonActions } from '@react-navigation/native';
 
 // ─── Avatar ────────────────────────────────────────────────────────────────
 
-function Avatar() {
+function Avatar({ initial }: { initial: string }) {
   return (
     <LinearGradient colors={['#8A6AFF', '#5A35FF']} style={styles.avatar}>
-      <Text style={styles.avatarLetter}>S</Text>
+      <Text style={styles.avatarLetter}>{initial}</Text>
     </LinearGradient>
   );
 }
 
 // ─── Streak Card ───────────────────────────────────────────────────────────
 
-function StreakCard() {
+function StreakCard({ streak }: { streak: number }) {
   const glowAnim = useRef(new Animated.Value(0.6)).current;
 
   useEffect(() => {
@@ -40,6 +43,8 @@ function StreakCard() {
     ).start();
   }, []);
 
+  const label = streak === 1 ? 'Day Streak' : 'Day Streak';
+
   return (
     <LinearGradient
       colors={['#1D1238', '#130D28']}
@@ -50,13 +55,15 @@ function StreakCard() {
       <View style={styles.streakLeft}>
         <Animated.Text style={[styles.streakEmoji, { opacity: glowAnim }]}>🔥</Animated.Text>
         <View>
-          <Text style={styles.streakTitle}>14 Day Streak</Text>
+          <Text style={styles.streakTitle}>{streak} {label}</Text>
           <Text style={styles.streakSub}>Keep the momentum going!</Text>
         </View>
       </View>
-      <View style={styles.onFireBadge}>
-        <Text style={styles.onFireText}>ON FIRE 🔥</Text>
-      </View>
+      {streak >= 7 && (
+        <View style={styles.onFireBadge}>
+          <Text style={styles.onFireText}>ON FIRE 🔥</Text>
+        </View>
+      )}
     </LinearGradient>
   );
 }
@@ -106,6 +113,8 @@ function SkillTrackCard({
   emoji: string; name: string; progress: number; progressColor: string;
   progressBg: string; lessonsDone: number; totalLessons: number; animDelay?: number;
 }) {
+  console.log('Progress percentage value:', progress);
+  console.log("TRACK CARD PROGRESS:", progress, typeof progress);
   const widthAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -115,7 +124,7 @@ function SkillTrackCard({
       delay: animDelay,
       useNativeDriver: false,
     }).start();
-  }, [progress]); // Re-animates bar whenever progress changes
+  }, [progress]);
 
   const animatedWidth = widthAnim.interpolate({
     inputRange: [0, 100],
@@ -129,12 +138,12 @@ function SkillTrackCard({
           <View style={[styles.trackIconBox, { backgroundColor: progressBg }]}>
             <Text style={styles.trackEmoji}>{emoji}</Text>
           </View>
-          <View>
-            <Text style={styles.trackName}>{name}</Text>
+          <View style={{ flex: 1, flexShrink: 1 }}>
+            <Text style={styles.trackName} numberOfLines={1}>{name}</Text>
             <Text style={styles.trackSub}>{lessonsDone}/{totalLessons} lessons done</Text>
           </View>
         </View>
-        <Text style={[styles.trackPercent, { color: progressColor }]}>{progress}%</Text>
+        <Text style={styles.trackPercent}>{Math.round(progress)}%</Text>
       </View>
       <View style={styles.progressBg}>
         <Animated.View
@@ -145,6 +154,26 @@ function SkillTrackCard({
   );
 }
 
+// ─── Offline Banner ────────────────────────────────────────────────────────
+
+function OfflineBanner() {
+  return (
+    <View style={styles.offlineBanner}>
+      <Ionicons name="cloud-offline-outline" size={14} color="#FFD93D" />
+      <Text style={styles.offlineTxt}>Offline mode · Showing cached data</Text>
+    </View>
+  );
+}
+
+// ─── Greeting ──────────────────────────────────────────────────────────────
+
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning, champion 🌅';
+  if (h < 17) return 'Good afternoon, champion ☀️';
+  return 'Good evening, champion 🌙';
+}
+
 // ─── Dashboard Screen ──────────────────────────────────────────────────────
 
 export default function DashboardScreen() {
@@ -152,7 +181,8 @@ export default function DashboardScreen() {
   const slideAnim = useRef(new Animated.Value(20)).current;
 
   const rootNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { totalLBsDone, tracksActive, badges, getTrackPercent, getTrackLessonsDone } = useProgress();
+  const { totalLBsDone, tracksActive, badges, getTrackPercent, getTrackLessonsDone, activeTracks } = useProgress();
+  const { profile, profileLoading, isNetworkError } = useAuth();
 
   const openBlaze = () => {
     const firstTrack = TRACKS[0];
@@ -163,95 +193,125 @@ export default function DashboardScreen() {
     });
   };
 
+  const openAddTrack = () => {
+    rootNav.dispatch(
+      CommonActions.navigate('Main', { screen: 'Tracks', params: { screen: 'AddTrack' } })
+    );
+  };
+
+  const displayTracks = TRACKS.filter((t) => activeTracks.includes(t.id));
+  console.log("HOME DASHBOARD TRACKS:", JSON.stringify(displayTracks));
+
   useEffect(() => {
-    console.log('[Dashboard] Mounted — totalLBsDone:', totalLBsDone);
     Animated.parallel([
       Animated.timing(fadeAnim,  { toValue: 1, duration: 500, useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
     ]).start();
   }, []);
 
+
+  const displayName    = profile?.full_name ?? 'Champion';
+  const avatarInitial  = displayName[0].toUpperCase();
+  const streakCount    = profile?.streak_count ?? 0;
+
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <Animated.View style={[styles.flex, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-          <ScrollView
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {/* ── Header ── */}
-            <View style={styles.header}>
-              <View>
-                <Text style={styles.greeting}>Good morning, champion 🌅</Text>
-                <Text style={styles.userName}>Sri</Text>
-              </View>
-              <Avatar />
-            </View>
+        {isNetworkError && <OfflineBanner />}
 
-            {/* ── Streak ── */}
-            <StreakCard />
-
-            {/* ── Ask Blaze ── */}
-            <TouchableOpacity style={styles.blazeBtn} activeOpacity={0.82} onPress={openBlaze}>
-              <View style={styles.blazeBtnLeft}>
-                <Text style={styles.blazeBtnEmoji}>🦅</Text>
+        {profileLoading && !profile ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator size="large" color="#7C5CFF" />
+          </View>
+        ) : (
+          <Animated.View style={[styles.flex, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+            <ScrollView
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* ── Header ── */}
+              <View style={styles.header}>
                 <View>
-                  <Text style={styles.blazeBtnTitle}>Ask Blaze</Text>
-                  <Text style={styles.blazeBtnSub}>Your AI mastery mentor</Text>
+                  <Text style={styles.greeting}>{getGreeting()}</Text>
+                  <Text style={styles.userName}>{displayName}</Text>
                 </View>
+                <Avatar initial={avatarInitial} />
               </View>
-              <Ionicons name="arrow-forward" size={18} color="#7C5CFF" />
-            </TouchableOpacity>
 
-            {/* ── Stat Pills ── */}
-            <View style={styles.statRow}>
-              <StatPill
-                value={String(totalLBsDone)}
-                label="LBs Done"
-                color="#A882FF"
-                bgColor="#130F28"
-                borderColor="#2A1A50"
-              />
-              <StatPill
-                value={String(tracksActive)}
-                label="Tracks Active"
-                color="#FF7070"
-                bgColor="#1E0E18"
-                borderColor="#3A1A2A"
-              />
-              <StatPill
-                value={String(badges)}
-                label="Badges"
-                color="#4ECDC4"
-                bgColor="#0C1E1C"
-                borderColor="#143530"
-              />
-            </View>
+              {/* ── Streak ── */}
+              <StreakCard streak={streakCount} />
 
-            {/* ── Blaze Nudge ── */}
-            <BlazeNudge lbsDone={totalLBsDone} />
+              {/* ── Ask Blaze ── */}
+              <TouchableOpacity style={styles.blazeBtn} activeOpacity={0.82} onPress={openBlaze}>
+                <View style={styles.blazeBtnLeft}>
+                  <Text style={styles.blazeBtnEmoji}>🦅</Text>
+                  <View>
+                    <Text style={styles.blazeBtnTitle}>Ask Blaze</Text>
+                    <Text style={styles.blazeBtnSub}>Your AI mastery mentor</Text>
+                  </View>
+                </View>
+                <Ionicons name="arrow-forward" size={18} color="#7C5CFF" />
+              </TouchableOpacity>
 
-            {/* ── Skill Tracks ── */}
-            <Text style={styles.sectionTitle}>Your Skill Tracks</Text>
-
-            {TRACKS.map((track, index) => {
-              const total = getTrackStats(track).total;
-              return (
-                <SkillTrackCard
-                  key={track.id}
-                  emoji={track.emoji}
-                  name={track.name}
-                  progress={getTrackPercent(track.id)}
-                  progressColor={track.progressColor}
-                  progressBg={track.iconBg}
-                  lessonsDone={getTrackLessonsDone(track.id)}
-                  totalLessons={total}
-                  animDelay={index * 120}
+              {/* ── Stat Pills ── */}
+              <View style={styles.statRow}>
+                <StatPill
+                  value={String(totalLBsDone)}
+                  label="LBs Done"
+                  color="#A882FF"
+                  bgColor="#130F28"
+                  borderColor="#2A1A50"
                 />
-              );
-            })}
-          </ScrollView>
-        </Animated.View>
+                <StatPill
+                  value={String(tracksActive)}
+                  label="Tracks Active"
+                  color="#FF7070"
+                  bgColor="#1E0E18"
+                  borderColor="#3A1A2A"
+                />
+                <StatPill
+                  value={String(badges)}
+                  label="Badges"
+                  color="#4ECDC4"
+                  bgColor="#0C1E1C"
+                  borderColor="#143530"
+                />
+              </View>
+
+              {/* ── Blaze Nudge ── */}
+              <BlazeNudge lbsDone={totalLBsDone} />
+
+              {/* ── Skill Tracks ── */}
+              <Text style={styles.sectionTitle}>Your Skill Tracks</Text>
+
+              {displayTracks.map((track, index) => {
+                const total = getTrackStats(track).total;
+                return (
+                  <SkillTrackCard
+                    key={track.id}
+                    emoji={track.emoji}
+                    name={track.name}
+                    progress={getTrackPercent(track.id)}
+                    progressColor={track.progressColor}
+                    progressBg={track.iconBg}
+                    lessonsDone={getTrackLessonsDone(track.id)}
+                    totalLessons={total}
+                    animDelay={index * 120}
+                  />
+                );
+              })}
+
+              {/* Explore more skills */}
+              <TouchableOpacity
+                style={styles.exploreBtn}
+                activeOpacity={0.75}
+                onPress={openAddTrack}
+              >
+                <Text style={styles.exploreTxt}>Explore More Skills →</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </Animated.View>
+        )}
       </SafeAreaView>
     </View>
   );
@@ -267,6 +327,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 10,
     paddingBottom: 28,
+  },
+
+  loadingWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#1A1200',
+    borderBottomWidth: 1,
+    borderBottomColor: '#3A2A00',
+    paddingVertical: 8,
+  },
+  offlineTxt: {
+    color: '#FFD93D',
+    fontSize: 12,
+    fontFamily: 'Poppins_400Regular',
   },
 
   header: {
@@ -356,6 +438,23 @@ const styles = StyleSheet.create({
 
   sectionTitle: { fontSize: 18, color: '#FFFFFF', fontFamily: 'Poppins_700Bold', marginBottom: 14 },
 
+  exploreBtn: {
+    alignItems: 'center',
+    paddingVertical: 14,
+    marginTop: 4,
+    marginBottom: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#2A1A4A',
+    backgroundColor: '#0C0A1E',
+  },
+  exploreTxt: {
+    color: '#7C5CFF',
+    fontSize: 13,
+    fontFamily: 'Poppins_600SemiBold',
+    letterSpacing: 0.2,
+  },
+
   trackCard: {
     backgroundColor: '#0E0B20', borderRadius: 20,
     padding: 18, marginBottom: 12,
@@ -363,14 +462,18 @@ const styles = StyleSheet.create({
   },
   trackRow: {
     flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', marginBottom: 14,
+    justifyContent: 'space-between', marginBottom: 14, overflow: 'visible',
   },
-  trackLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  trackLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, marginRight: 8 },
   trackIconBox: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   trackEmoji:   { fontSize: 24 },
   trackName:    { color: '#FFFFFF', fontSize: 15, fontFamily: 'Poppins_600SemiBold' },
   trackSub:     { color: '#5A4A7A', fontSize: 11.5, fontFamily: 'Poppins_400Regular', marginTop: 2 },
-  trackPercent: { fontSize: 18, fontFamily: 'Poppins_700Bold' },
+  trackPercent: {
+    minWidth: 45, textAlign: 'right', paddingLeft: 4,
+    color: '#8B6FFF', fontSize: 18, fontWeight: '800',
+    zIndex: 10, backgroundColor: 'transparent',
+  },
   progressBg:   { height: 8, backgroundColor: '#1A1640', borderRadius: 4, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 4 },
 });

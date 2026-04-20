@@ -4,6 +4,7 @@ import TracksScreen from '../screens/TracksScreen';
 import MasteryMapScreen from '../screens/MasteryMapScreen';
 import LearningBlockPlayerScreen from '../screens/LearningBlockPlayerScreen';
 import AchievementCelebrationScreen from '../screens/AchievementCelebrationScreen';
+import AddTrackScreen from '../screens/AddTrackScreen';
 import { TracksStackParamList } from '../types/navigation';
 
 const Stack = createNativeStackNavigator<TracksStackParamList>();
@@ -18,6 +19,11 @@ export default function TracksStackNavigator() {
         name="AchievementCelebration"
         component={AchievementCelebrationScreen}
         options={{ animation: 'fade', gestureEnabled: false }}
+      />
+      <Stack.Screen
+        name="AddTrack"
+        component={AddTrackScreen}
+        options={{ animation: 'slide_from_bottom' }}
       />
     </Stack.Navigator>
   );

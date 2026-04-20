@@ -3,6 +3,7 @@ import { NavigatorScreenParams } from '@react-navigation/native';
 export type TracksStackParamList = {
   TracksList: undefined;
   MasteryMap: { trackId: string; trackName: string };
+  AddTrack: undefined;
   LearningBlockPlayer: {
     lbId: number;
     lbTitle: string;
@@ -22,6 +23,7 @@ export type TracksStackParamList = {
     trackName: string;
     nextLbNumber: number;
     totalLBs: number;
+    score?: number;
   };
 };
 

@@ -8,12 +8,17 @@ import {
   Animated,
   Modal,
   Dimensions,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { CommonActions } from '@react-navigation/native';
 import { RootStackParamList } from '../types/navigation';
+import { startCheckout } from '../services/stripeService';
+import { useAuth } from '../context/AuthContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Paywall'>;
 
@@ -170,10 +175,12 @@ function ProPlusModal({ visible, onClose }: { visible: boolean; onClose: () => v
 export default function PaywallScreen({ navigation, route }: Props) {
   const source = route.params?.source;
   const insets = useSafeAreaInsets();
+  const { refreshProfile, setIsPro } = useAuth();
 
-  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('yearly');
+  const [selectedPlan, setSelectedPlan]   = useState<'monthly' | 'yearly'>('yearly');
   const [showProPlus, setShowProPlus]     = useState(false);
   const [showFreeMsg, setShowFreeMsg]     = useState(false);
+  const [isProcessing, setIsProcessing]   = useState(false);
 
   const fadeAnim    = useRef(new Animated.Value(0)).current;
   const scaleAnim   = useRef(new Animated.Value(0.94)).current;
@@ -207,6 +214,38 @@ export default function PaywallScreen({ navigation, route }: Props) {
       // Navigation errors fail silently — the screen will be dismissed by the OS
     }
   }
+
+  const handlePurchase = async () => {
+    if (isProcessing) return;
+    setIsProcessing(true);
+    try {
+      const result = await startCheckout(selectedPlan);
+      if (result === 'success') {
+        // Update isPro instantly so screens unlock before the async profile refresh completes
+        setIsPro(true);
+        await refreshProfile();
+        Alert.alert(
+          'Welcome to Pro! 🔥',
+          'Blaze is ready to take you to mastery',
+          [{
+            text: "Let's Go!",
+            onPress: () => navigation.dispatch(
+              CommonActions.reset({ index: 0, routes: [{ name: 'Main' }] })
+            ),
+          }]
+        );
+      }
+      // 'cancelled' → sheet dismissed, stay on paywall
+    } catch (err: any) {
+      Alert.alert(
+        'Payment Failed',
+        'Please check your card details and try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   const ctaSubtext = selectedPlan === 'yearly'
     ? 'Then USD 79/year. Cancel anytime.'
@@ -260,14 +299,22 @@ export default function PaywallScreen({ navigation, route }: Props) {
           </View>
 
           {/* ── CTA ── */}
-          <TouchableOpacity activeOpacity={0.84} style={styles.ctaWrap}>
+          <TouchableOpacity
+            activeOpacity={0.84}
+            style={styles.ctaWrap}
+            onPress={handlePurchase}
+            disabled={isProcessing}
+          >
             <LinearGradient
               colors={['#9B7AFF', '#7C5CFF', '#5A35FF']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.ctaBtn}
             >
-              <Text style={styles.ctaTxt}>Start 7-Day Free Trial 🔥</Text>
+              {isProcessing
+                ? <ActivityIndicator color="#FFFFFF" size="small" />
+                : <Text style={styles.ctaTxt}>Start 7-Day Free Trial 🔥</Text>
+              }
             </LinearGradient>
           </TouchableOpacity>
 

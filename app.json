@@ -28,6 +28,17 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "scheme": "ultimaven",
+    "plugins": [
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.ultimaven",
+          "enableGooglePay": false
+        }
+      ],
+      "expo-secure-store"
+    ]
   }
 }

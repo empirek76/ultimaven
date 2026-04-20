@@ -9,17 +9,8 @@ import React, {
 import { TRACKS } from '../data/tracks';
 import { getCompletedLBIds, markLBCompleted } from '../utils/progress';
 import { sendMilestoneNotification } from '../notifications/notificationService';
-
-// ─── Static completions (pre-loaded in tracks.ts, e.g. Guitar LBs 1-8) ──────
-
-const STATIC_COMPLETED: Record<string, Set<number>> = {};
-for (const track of TRACKS) {
-  STATIC_COMPLETED[track.id] = new Set(
-    track.sections.flatMap((s) =>
-      s.blocks.filter((b) => b.status === 'completed').map((b) => b.id)
-    )
-  );
-}
+import { useAuth } from './AuthContext';
+import { supabase } from '../services/supabase';
 
 const TRACK_TOTALS: Record<string, number> = {};
 for (const track of TRACKS) {
@@ -29,19 +20,18 @@ for (const track of TRACKS) {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ProgressContextValue {
-  /** User-completed LB ids per track (from AsyncStorage). Does NOT include static ones. */
   completedByTrack: Record<string, number[]>;
-  /** Sum of all completed LBs across every track (static + user). */
   totalLBsDone: number;
   totalXP: number;
   tracksActive: number;
   badges: number;
-  /** Merged set: static completions + user completions for a given track. */
+  activeTracks: string[];
   getTrackCompletedIds: (trackId: string) => Set<number>;
   getTrackPercent: (trackId: string) => number;
   getTrackLessonsDone: (trackId: string) => number;
-  /** Mark an LB as completed — updates state immediately, then persists. */
-  completeLB: (trackId: string, lbId: number) => Promise<void>;
+  completeLB: (trackId: string, lbId: number, score?: number) => Promise<void>;
+  addTrack: (trackId: string) => Promise<void>;
+  refreshActiveTracks: (userId?: string) => Promise<void>;
 }
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -51,19 +41,44 @@ const ProgressContext = createContext<ProgressContextValue | null>(null);
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function ProgressProvider({ children }: { children: React.ReactNode }) {
+  const { user, loading: authLoading } = useAuth();
   const [completedByTrack, setCompletedByTrack] = useState<Record<string, number[]>>({});
+  const [activeTracks, setActiveTracks] = useState<string[]>([]);
 
-  // Load all user progress from AsyncStorage once on mount
   useEffect(() => {
-    Promise.all(TRACKS.map((t) => getCompletedLBIds(t.id))).then((results) => {
-      const data: Record<string, number[]> = {};
-      TRACKS.forEach((t, i) => { data[t.id] = results[i]; });
-      setCompletedByTrack(data);
-    });
-  }, []);
+    if (authLoading) return;
+
+    setCompletedByTrack({});
+    setActiveTracks([]);
+
+    if (!user) return;
+
+    // Load which tracks the user has added
+    supabase
+      .from('skill_tracks')
+      .select('track_key')
+      .eq('user_id', user.id)
+      .then(({ data, error }) => {
+        console.log('[ProgressContext] skill_tracks query result:', JSON.stringify(data), 'error:', error?.message);
+        if (data) {
+          const keys = data.map((r: { track_key: string }) => r.track_key);
+          console.log('[ProgressContext] setActiveTracks ->', keys);
+          setActiveTracks(keys);
+        }
+      });
+
+    // Load real completions from Supabase only
+    Promise.all(TRACKS.map((t) => getCompletedLBIds(t.id)))
+      .then((results) => {
+        const data: Record<string, number[]> = {};
+        TRACKS.forEach((t, i) => { data[t.id] = results[i]; });
+        setCompletedByTrack(data);
+      })
+      .catch(() => {});
+  }, [user, authLoading]);
 
   // Optimistic update: state changes immediately, then persists to AsyncStorage
-  const completeLB = useCallback(async (trackId: string, lbId: number): Promise<void> => {
+  const completeLB = useCallback(async (trackId: string, lbId: number, score: number = 100): Promise<void> => {
     let newUserIds: number[] = [];
     setCompletedByTrack((prev) => {
       const existing = prev[trackId] ?? [];
@@ -71,11 +86,10 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
       newUserIds = [...existing, lbId];
       return { ...prev, [trackId]: newUserIds };
     });
-    await markLBCompleted(trackId, lbId);
+    await markLBCompleted(trackId, lbId, score);
 
     // Milestone notifications (fire-and-forget)
-    const staticIds  = STATIC_COMPLETED[trackId] ?? new Set<number>();
-    const mergedSize = new Set([...staticIds, ...newUserIds]).size;
+    const mergedSize = new Set(newUserIds).size;
     const trackTotal = TRACK_TOTALS[trackId] ?? 1;
     const track      = TRACKS.find((t) => t.id === trackId);
 
@@ -86,16 +100,59 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Merged set: static + user completions
+  const refreshActiveTracks = useCallback(async (userId?: string): Promise<void> => {
+    const id = userId ?? user?.id;
+    if (!id) return;
+    const { data } = await supabase
+      .from('skill_tracks')
+      .select('track_key')
+      .eq('user_id', id);
+    if (data) {
+      const trackKeys = data.map((r: { track_key: string }) => r.track_key);
+      console.log('[ProgressContext] Tracks loaded from Supabase:', trackKeys);
+      setActiveTracks(trackKeys);
+    }
+  }, [user]);
+
+  const addTrack = useCallback(async (trackId: string): Promise<void> => {
+    if (!user) return;
+
+    setActiveTracks((prev) => prev.includes(trackId) ? prev : [...prev, trackId]);
+
+    const track = TRACKS.find((t) => t.id === trackId);
+    try {
+      await supabase.from('skill_tracks').upsert(
+        {
+          user_id:             user.id,
+          track_key:           trackId,
+          track_name:          track?.name ?? trackId,
+          track_emoji:         track?.emoji ?? '',
+          total_lbs:           track?.sections.flatMap((s) => s.blocks).length ?? 0,
+          completed_lbs:       0,
+          progress_percentage: 0,
+          is_active:           true,
+        },
+        { onConflict: 'user_id,track_key' }
+      );
+    } catch {
+      setActiveTracks((prev) => prev.filter((id) => id !== trackId));
+    }
+  }, [user]);
+
   const getTrackCompletedIds = useCallback((trackId: string): Set<number> => {
-    const staticIds = STATIC_COMPLETED[trackId] ?? new Set<number>();
-    const userIds   = completedByTrack[trackId] ?? [];
-    return new Set<number>([...staticIds, ...userIds]);
+    return new Set<number>(completedByTrack[trackId] ?? []);
   }, [completedByTrack]);
 
   const getTrackPercent = useCallback((trackId: string): number => {
-    const total = TRACK_TOTALS[trackId] ?? 1;
-    return Math.round((getTrackCompletedIds(trackId).size / total) * 100);
+    const total = TRACK_TOTALS[trackId];
+    if (!total || total === 0) {
+      console.log('TRACK_TOTALS miss for trackId:', trackId, 'Available keys:', Object.keys(TRACK_TOTALS));
+      return 0;
+    }
+    const completed = getTrackCompletedIds(trackId).size;
+    const pct = Math.round((completed / total) * 100);
+    console.log('getTrackPercent:', trackId, completed, '/', total, '=', pct);
+    return pct;
   }, [getTrackCompletedIds]);
 
   const getTrackLessonsDone = useCallback((trackId: string): number => {
@@ -108,7 +165,7 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
   );
 
   const totalXP      = totalLBsDone * 50;
-  const tracksActive = TRACKS.filter((t) => getTrackCompletedIds(t.id).size > 0).length;
+  const tracksActive = activeTracks.length;
   const badges       = Math.floor(totalLBsDone / 4);
 
   const value: ProgressContextValue = {
@@ -117,10 +174,13 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
     totalXP,
     tracksActive,
     badges,
+    activeTracks,
     getTrackCompletedIds,
     getTrackPercent,
     getTrackLessonsDone,
     completeLB,
+    addTrack,
+    refreshActiveTracks,
   };
 
   return (

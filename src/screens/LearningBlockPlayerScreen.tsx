@@ -168,20 +168,29 @@ function AnswerCard({
 
 // ─── Practice tab ────────────────────────────────────────────────────────────
 
-function PracticeTab({ quiz, onRetry }: { quiz: Quiz; onRetry: () => void }) {
+function PracticeTab({ quiz, onRetry, onAnswered }: { quiz: Quiz; onRetry: () => void; onAnswered: (score: number) => void }) {
   const [selected, setSelected] = useState<number | null>(null);
   const hasWrongPick = selected !== null && !quiz.answers[selected].correct;
+  const scoreDisplay = selected === null
+    ? '—'
+    : quiz.answers[selected].correct ? '100% ✓' : '75% ✓';
 
   function handleRetry() {
     setSelected(null);
     onRetry();
   }
 
+  function handleSelect(id: number) {
+    if (selected !== null) return;
+    setSelected(id);
+    onAnswered(quiz.answers[id].correct ? 100 : 75);
+  }
+
   return (
     <View style={styles.practiceWrap}>
       <View style={styles.scoreRow}>
         <Text style={styles.scoreLabel}>Practice Score</Text>
-        <Text style={styles.scoreValue}>82% ✓</Text>
+        <Text style={styles.scoreValue}>{scoreDisplay}</Text>
       </View>
 
       <View style={styles.exerciseCard}>
@@ -197,7 +206,7 @@ function PracticeTab({ quiz, onRetry }: { quiz: Quiz; onRetry: () => void }) {
           answer={ans}
           selected={selected === ans.id}
           revealed={hasWrongPick}
-          onPress={() => { if (selected === null) setSelected(ans.id); }}
+          onPress={() => handleSelect(ans.id)}
         />
       ))}
 
@@ -230,15 +239,16 @@ export default function LearningBlockPlayerScreen({ navigation, route }: Props) 
     trackId, trackEmoji, trackName, totalLBs,
   } = route.params;
 
-  const [activeTab, setActiveTab] = useState<TabName>('Practice');
-  const [retryKey, setRetryKey]   = useState(0);
+  const [activeTab, setActiveTab]     = useState<TabName>('Practice');
+  const [retryKey, setRetryKey]       = useState(0);
+  const [practiceScore, setPracticeScore] = useState<number>(100);
 
   const rootNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { completeLB } = useProgress();
   const quiz = QUIZ_DATA[trackId] ?? QUIZ_DATA['guitar'];
 
   async function handleComplete() {
-    await completeLB(trackId, lbId);
+    await completeLB(trackId, lbId, practiceScore);
     navigation.navigate('AchievementCelebration', {
       lbId,
       lbTitle,
@@ -248,6 +258,7 @@ export default function LearningBlockPlayerScreen({ navigation, route }: Props) 
       trackName,
       nextLbNumber: lbNumber + 1,
       totalLBs,
+      score: practiceScore,
     });
   }
 
@@ -283,7 +294,12 @@ export default function LearningBlockPlayerScreen({ navigation, route }: Props) 
             <TabBar active={activeTab} onChange={setActiveTab} />
 
             {activeTab === 'Practice' && (
-              <PracticeTab key={retryKey} quiz={quiz} onRetry={() => setRetryKey((k) => k + 1)} />
+              <PracticeTab
+                key={retryKey}
+                quiz={quiz}
+                onRetry={() => setRetryKey((k) => k + 1)}
+                onAnswered={(s) => setPracticeScore(s)}
+              />
             )}
             {activeTab === 'Learn'    && <PlaceholderTab emoji="📖" label="Lesson content coming soon" />}
             {activeTab === 'Examples' && <PlaceholderTab emoji="🎵" label="Examples coming soon" />}

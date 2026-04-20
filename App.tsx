@@ -8,10 +8,15 @@ import {
   Poppins_400Regular,
 } from '@expo-google-fonts/poppins';
 import * as Notifications from 'expo-notifications';
+import { StripeProvider } from '@stripe/stripe-react-native';
 import { NavigationContainerRef, CommonActions } from '@react-navigation/native';
 import RootNavigator from './src/navigation/RootNavigator';
 import { ProgressProvider } from './src/context/ProgressContext';
+import { AuthProvider } from './src/context/AuthContext';
 import { RootStackParamList } from './src/types/navigation';
+import { migrateDataVersion } from './src/utils/progress';
+
+const STRIPE_PK = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '';
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -21,6 +26,10 @@ export default function App() {
   });
 
   const navRef = useRef<NavigationContainerRef<RootStackParamList> | null>(null);
+
+  useEffect(() => {
+    void migrateDataVersion();
+  }, []);
 
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
@@ -44,10 +53,14 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <ProgressProvider>
-        <StatusBar style="light" />
-        <RootNavigator navRef={navRef} />
-      </ProgressProvider>
+      <AuthProvider>
+        <StripeProvider publishableKey={STRIPE_PK} urlScheme="ultimaven">
+          <ProgressProvider>
+            <StatusBar style="light" />
+            <RootNavigator navRef={navRef} />
+          </ProgressProvider>
+        </StripeProvider>
+      </AuthProvider>
     </SafeAreaProvider>
   );
 }
