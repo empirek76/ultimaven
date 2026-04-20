@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Linking,
+  ImageBackground,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,7 +15,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackScreenProps, NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Video, ResizeMode } from 'expo-av';
-import { WebView } from 'react-native-webview';
 import { RootStackParamList } from '../types/navigation';
 import { useProgress } from '../context/ProgressContext';
 import { useTheme, ThemeColors } from '../context/ThemeContext';
@@ -29,47 +29,137 @@ type TabName = 'Learn' | 'Practice' | 'Examples';
 type QuizAnswer = { id: number; text: string; correct: boolean };
 type Quiz = { question: string; answers: QuizAnswer[] };
 
-const QUIZ_DATA: Record<string, Quiz> = {
-  guitar: {
-    question: 'Which fingers should you use to fret the G Major chord?',
-    answers: [
-      { id: 0, text: 'Fingers 2, 3 and 4 on strings 6, 5 and 1', correct: true  },
-      { id: 1, text: 'Fingers 1, 2 and 3 on strings 4, 5 and 6', correct: false },
-      { id: 2, text: 'Any three fingers on the top three strings', correct: false },
-    ],
-  },
-  finance: {
-    question: 'What is the first step to building financial health?',
-    answers: [
-      { id: 0, text: 'Track every dollar you earn and spend',     correct: true  },
-      { id: 1, text: 'Invest as much as possible right away',     correct: false },
-      { id: 2, text: 'Pay off all debts before saving anything',  correct: false },
-    ],
-  },
-  body: {
-    question: 'Which of the following best describes a compound movement?',
-    answers: [
-      { id: 0, text: 'An exercise targeting multiple muscle groups at once', correct: true  },
-      { id: 1, text: 'An exercise performed on machines only',               correct: false },
-      { id: 2, text: 'Any movement that requires free weights',              correct: false },
-    ],
-  },
-  design: {
-    question: 'What is the primary purpose of visual hierarchy in design?',
-    answers: [
-      { id: 0, text: "Guide the viewer's eye to the most important elements first", correct: true  },
-      { id: 1, text: 'Use as many fonts as possible for visual variety',            correct: false },
-      { id: 2, text: 'Fill all available white space on the canvas',                correct: false },
-    ],
-  },
-  reading: {
-    question: 'What is subvocalisation in reading?',
-    answers: [
-      { id: 0, text: 'Silently pronouncing words in your head while reading', correct: true  },
-      { id: 1, text: 'Reading out loud to improve comprehension',             correct: false },
-      { id: 2, text: 'Using a pointer to track text on the page',             correct: false },
-    ],
-  },
+const QUIZ_DATA: Record<string, Quiz[]> = {
+  guitar: [
+    {
+      question: 'Which fingers should you use to fret the G Major chord?',
+      answers: [
+        { id: 0, text: 'Fingers 2, 3 and 4 on strings 6, 5 and 1', correct: true  },
+        { id: 1, text: 'Fingers 1, 2 and 3 on strings 4, 5 and 6', correct: false },
+        { id: 2, text: 'Any three fingers on the top three strings', correct: false },
+      ],
+    },
+    {
+      question: 'What does "fretting" a string mean?',
+      answers: [
+        { id: 0, text: 'Pressing the string against the fretboard to change its pitch', correct: true  },
+        { id: 1, text: 'Strumming the string with a pick',                              correct: false },
+        { id: 2, text: 'Muting a string with your palm',                                correct: false },
+      ],
+    },
+    {
+      question: 'How many strings does a standard guitar have?',
+      answers: [
+        { id: 0, text: '6', correct: true  },
+        { id: 1, text: '4', correct: false },
+        { id: 2, text: '8', correct: false },
+      ],
+    },
+  ],
+  finance: [
+    {
+      question: 'What is the first step to building financial health?',
+      answers: [
+        { id: 0, text: 'Track every dollar you earn and spend',    correct: true  },
+        { id: 1, text: 'Invest as much as possible right away',    correct: false },
+        { id: 2, text: 'Pay off all debts before saving anything', correct: false },
+      ],
+    },
+    {
+      question: 'What percentage of income is commonly recommended to save each month?',
+      answers: [
+        { id: 0, text: 'At least 20%',       correct: true  },
+        { id: 1, text: 'At least 5%',        correct: false },
+        { id: 2, text: 'Whatever is left over after spending', correct: false },
+      ],
+    },
+    {
+      question: 'What is compound interest?',
+      answers: [
+        { id: 0, text: 'Earning interest on both your principal and previously earned interest', correct: true  },
+        { id: 1, text: 'A fixed interest rate that never changes',                               correct: false },
+        { id: 2, text: 'Interest charged only on the original loan amount',                      correct: false },
+      ],
+    },
+  ],
+  body: [
+    {
+      question: 'Which of the following best describes a compound movement?',
+      answers: [
+        { id: 0, text: 'An exercise targeting multiple muscle groups at once', correct: true  },
+        { id: 1, text: 'An exercise performed on machines only',               correct: false },
+        { id: 2, text: 'Any movement that requires free weights',              correct: false },
+      ],
+    },
+    {
+      question: 'How many rest days per week is generally recommended for beginners?',
+      answers: [
+        { id: 0, text: '2–3 rest days',    correct: true  },
+        { id: 1, text: 'No rest days',     correct: false },
+        { id: 2, text: '5–6 rest days',    correct: false },
+      ],
+    },
+    {
+      question: 'What is the primary purpose of a proper warm-up before exercise?',
+      answers: [
+        { id: 0, text: 'Increase blood flow and reduce injury risk',       correct: true  },
+        { id: 1, text: 'Build muscle strength before the main workout',    correct: false },
+        { id: 2, text: 'Burn extra calories before the session starts',    correct: false },
+      ],
+    },
+  ],
+  design: [
+    {
+      question: 'What is the primary purpose of visual hierarchy in design?',
+      answers: [
+        { id: 0, text: "Guide the viewer's eye to the most important elements first", correct: true  },
+        { id: 1, text: 'Use as many fonts as possible for visual variety',            correct: false },
+        { id: 2, text: 'Fill all available white space on the canvas',                correct: false },
+      ],
+    },
+    {
+      question: 'Which colour model is used for digital screens?',
+      answers: [
+        { id: 0, text: 'RGB (Red, Green, Blue)',      correct: true  },
+        { id: 1, text: 'CMYK (Cyan, Magenta, Yellow, Key)', correct: false },
+        { id: 2, text: 'HSL (Hue, Saturation, Lightness)',  correct: false },
+      ],
+    },
+    {
+      question: 'What does "negative space" refer to in design?',
+      answers: [
+        { id: 0, text: 'The empty space around and between subjects in a composition', correct: true  },
+        { id: 1, text: 'Using only dark colours in a design',                          correct: false },
+        { id: 2, text: 'Removing all decorative elements from a layout',               correct: false },
+      ],
+    },
+  ],
+  reading: [
+    {
+      question: 'What is subvocalisation in reading?',
+      answers: [
+        { id: 0, text: 'Silently pronouncing words in your head while reading', correct: true  },
+        { id: 1, text: 'Reading out loud to improve comprehension',             correct: false },
+        { id: 2, text: 'Using a pointer to track text on the page',             correct: false },
+      ],
+    },
+    {
+      question: 'What is the most effective technique for improving reading speed?',
+      answers: [
+        { id: 0, text: 'Reducing subvocalisation and expanding your eye fixation span', correct: true  },
+        { id: 1, text: 'Reading every word twice to reinforce memory',                  correct: false },
+        { id: 2, text: 'Skipping punctuation to maintain pace',                         correct: false },
+      ],
+    },
+    {
+      question: 'What is "chunking" in the context of speed reading?',
+      answers: [
+        { id: 0, text: 'Reading groups of words together rather than one word at a time', correct: true  },
+        { id: 1, text: 'Breaking a book into sections and reading one per day',           correct: false },
+        { id: 2, text: 'Highlighting important sentences in a text',                      correct: false },
+      ],
+    },
+  ],
 };
 
 // ─── Video player ─────────────────────────────────────────────────────────────
@@ -84,10 +174,11 @@ function getYouTubeId(url: string): string | null {
 type VideoZoneState = 'fetching' | 'no_video' | 'youtube' | 'file';
 
 function VideoPlayer({ trackId, lbNumber, lbTitle }: { trackId: string; lbNumber: number; lbTitle: string }) {
-  const [zoneState, setZoneState] = useState<VideoZoneState>('fetching');
-  const [videoUrl,  setVideoUrl]  = useState<string | null>(null);
-  const [youtubeId, setYoutubeId] = useState<string | null>(null);
-  const [loading,   setLoading]   = useState(false);
+  const [zoneState,   setZoneState]   = useState<VideoZoneState>('fetching');
+  const [videoUrl,    setVideoUrl]    = useState<string | null>(null);
+  const [youtubeId,   setYoutubeId]   = useState<string | null>(null);
+  const [youtubeUrl,  setYoutubeUrl]  = useState<string | null>(null);
+  const [loading,     setLoading]     = useState(false);
   const videoRef = useRef<Video>(null);
 
   useEffect(() => {
@@ -107,7 +198,12 @@ function VideoPlayer({ trackId, lbNumber, lbTitle }: { trackId: string; lbNumber
 
         if (data?.youtube_url) {
           const id = getYouTubeId(data.youtube_url);
-          if (id) { setYoutubeId(id); setZoneState('youtube'); return; }
+          if (id) {
+            setYoutubeId(id);
+            setYoutubeUrl(data.youtube_url);
+            setZoneState('youtube');
+            return;
+          }
         }
         if (data?.video_path) {
           const url = getLBVideoUrl(data.video_path);
@@ -138,7 +234,7 @@ function VideoPlayer({ trackId, lbNumber, lbTitle }: { trackId: string; lbNumber
       <LinearGradient colors={['#1E0A44', '#180940', '#0D0D1A']} style={videoStyles.zone}>
         <View style={videoStyles.placeholderContent}>
           <Text style={videoStyles.placeholderEmoji}>🎬</Text>
-          <Text style={videoStyles.placeholderText}>Video coming soon</Text>
+          <Text style={videoStyles.placeholderText}>Video coming soon 🎬</Text>
         </View>
         <View style={videoStyles.zoneMeta} pointerEvents="none">
           <Text style={videoStyles.zoneTitle} numberOfLines={1}>{lbTitle} — Concept</Text>
@@ -148,16 +244,24 @@ function VideoPlayer({ trackId, lbNumber, lbTitle }: { trackId: string; lbNumber
   }
 
   if (zoneState === 'youtube') {
+    const thumbUri = `https://img.youtube.com/vi/${youtubeId}/maxresdefault.jpg`;
     return (
-      <View style={videoStyles.playerWrap}>
-        <WebView
-          style={videoStyles.video}
-          source={{ uri: `https://www.youtube.com/embed/${youtubeId}?playsinline=1&rel=0` }}
-          allowsFullscreenVideo
-          mediaPlaybackRequiresUserAction
-          javaScriptEnabled
-        />
-      </View>
+      <TouchableOpacity activeOpacity={0.9} onPress={() => Linking.openURL(youtubeUrl!)}>
+        <ImageBackground
+          source={{ uri: thumbUri }}
+          style={videoStyles.ytCard}
+          imageStyle={{ resizeMode: 'cover' }}
+        >
+          <View style={videoStyles.ytOverlay}>
+            <View style={videoStyles.ytPlayBtn}>
+              <Text style={videoStyles.ytPlayArrow}>▶</Text>
+            </View>
+          </View>
+          <View style={videoStyles.ytLabel}>
+            <Text style={videoStyles.ytLabelTxt}>Tap to watch on YouTube</Text>
+          </View>
+        </ImageBackground>
+      </TouchableOpacity>
     );
   }
 
@@ -206,6 +310,13 @@ const videoStyles = StyleSheet.create({
   loadingOverlay:     { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)' },
   testBtn:            { backgroundColor: '#2a2a2a', paddingVertical: 8, paddingHorizontal: 14, alignItems: 'center' },
   testBtnTxt:         { color: '#888', fontSize: 11, fontFamily: 'Poppins_400Regular' },
+
+  ytCard:             { width: '100%', height: VIDEO_HEIGHT, backgroundColor: '#0F0F0F' },
+  ytOverlay:          { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  ytPlayBtn:          { width: 64, height: 64, backgroundColor: '#FF0000', borderRadius: 14, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 8, elevation: 6 },
+  ytPlayArrow:        { color: '#FFFFFF', fontSize: 24, marginLeft: 4 },
+  ytLabel:            { position: 'absolute', bottom: 12, left: 16 },
+  ytLabelTxt:         { color: 'rgba(255,255,255,0.9)', fontSize: 12, fontFamily: 'Poppins_600SemiBold', textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
 });
 
 // ─── Tab bar ────────────────────────────────────────────────────────────────
@@ -383,7 +494,8 @@ export default function LearningBlockPlayerScreen({ navigation, route }: Props) 
   const { colors } = useTheme();
   const rootNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { completeLB } = useProgress();
-  const quiz = QUIZ_DATA[trackId] ?? QUIZ_DATA['guitar'];
+  const quizBank = QUIZ_DATA[trackId] ?? QUIZ_DATA['guitar'];
+  const quiz = quizBank[(lbNumber - 1) % quizBank.length];
 
   const styles = useMemo(() => makeStyles(colors), [colors]);
 

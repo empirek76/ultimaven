@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Image,
   RefreshControl,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,7 +31,8 @@ interface Submission {
   lb_title:         string;
   lb_description:   string | null;
   lb_outcome:       string | null;
-  video_path:       string;
+  video_path:       string | null;
+  youtube_url:      string | null;
   thumbnail_path:   string | null;
   duration_seconds: number | null;
   status:           string;
@@ -40,49 +42,79 @@ interface Submission {
   creator: { full_name: string | null; email: string | null } | null;
 }
 
-// ─── Inline video player for admin card ───────────────────────────────────────
+// ─── Video preview for admin card ─────────────────────────────────────────────
+// YouTube → show thumbnail + external link. File → inline Video player.
 
-function AdminVideoPlayer({ videoPath }: { videoPath: string }) {
+function AdminVideoPreview({ videoPath, youtubeUrl }: { videoPath: string | null; youtubeUrl: string | null }) {
+  const { colors } = useTheme();
+
+  if (youtubeUrl) {
+    const match   = youtubeUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
+    const ytId    = match?.[1];
+    const thumbUri = ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : null;
+
+    return (
+      <View style={avStyles.wrap}>
+        {thumbUri ? (
+          <Image source={{ uri: thumbUri }} style={avStyles.thumb} resizeMode="cover" />
+        ) : (
+          <View style={[avStyles.thumb, { backgroundColor: '#0F0F0F', alignItems: 'center', justifyContent: 'center' }]}>
+            <Text style={{ fontSize: 32 }}>▶</Text>
+          </View>
+        )}
+        <TouchableOpacity
+          style={[avStyles.ytBtn, { backgroundColor: '#FF0000' }]}
+          onPress={() => Linking.openURL(youtubeUrl)}
+          activeOpacity={0.82}
+        >
+          <Text style={avStyles.ytBtnTxt}>▶  Preview on YouTube</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (videoPath) {
+    return <AdminFilePlayer videoPath={videoPath} />;
+  }
+
+  return null;
+}
+
+function AdminFilePlayer({ videoPath }: { videoPath: string }) {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [loading,  setLoading]  = useState(true);
   const videoRef = useRef<Video>(null);
 
   useEffect(() => {
     try {
-      const url = getLBVideoUrl(videoPath);
-      setVideoUrl(url);
+      setVideoUrl(getLBVideoUrl(videoPath));
     } catch (e) {
-      console.error('AdminVideoPlayer URL error:', e);
+      console.error('AdminFilePlayer URL error:', e);
     }
-    setLoading(false);
   }, [videoPath]);
+
+  if (!videoUrl) return null;
 
   return (
     <View style={avStyles.wrap}>
-      {loading ? (
-        <View style={avStyles.overlay}>
-          <ActivityIndicator size="small" color="#7C5CFF" />
-        </View>
-      ) : (
-        <Video
-          ref={videoRef}
-          source={{ uri: videoUrl! }}
-          style={avStyles.video}
-          resizeMode={ResizeMode.CONTAIN}
-          shouldPlay={false}
-          isLooping={false}
-          useNativeControls
-          onError={(error) => console.error('Admin video error:', error)}
-        />
-      )}
+      <Video
+        ref={videoRef}
+        source={{ uri: videoUrl }}
+        style={avStyles.thumb}
+        resizeMode={ResizeMode.CONTAIN}
+        shouldPlay={false}
+        isLooping={false}
+        useNativeControls
+        onError={(error) => console.error('Admin video error:', error)}
+      />
     </View>
   );
 }
 
 const avStyles = StyleSheet.create({
-  wrap:    { width: '100%', aspectRatio: 16/9, backgroundColor: '#000', borderRadius: 12, overflow: 'hidden' },
-  video:   { width: '100%', height: '100%' },
-  overlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },
+  wrap:    { width: '100%', borderRadius: 12, overflow: 'hidden', backgroundColor: '#000', gap: 0 },
+  thumb:   { width: '100%', aspectRatio: 16/9 },
+  ytBtn:   { paddingVertical: 10, alignItems: 'center' },
+  ytBtnTxt:{ color: '#FFF', fontSize: 13, fontFamily: 'Poppins_600SemiBold' },
 });
 
 // ─── Submission card ───────────────────────────────────────────────────────────
@@ -152,7 +184,7 @@ function SubmissionCard({
         />
       ) : null}
 
-      <AdminVideoPlayer videoPath={item.video_path} />
+      <AdminVideoPreview videoPath={item.video_path} youtubeUrl={item.youtube_url} />
 
       {item.duration_seconds ? (
         <Text style={[cardStyles.duration, { color: colors.textSecondary }]}>
@@ -272,11 +304,13 @@ export default function AdminScreen() {
   const fetchSubmissions = useCallback(async (tab: FilterTab) => {
     setLoading(true);
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('lb_submissions')
-        .select(`*, creator:creator_id (full_name, email)`)
+        .select('*, creator:creator_id (full_name, email)')
         .eq('status', statusMap[tab])
         .order('submitted_at', { ascending: false });
+
+      console.error('ADMIN QUERY RESULT tab:', tab, 'count:', data?.length ?? 0, 'ERROR:', JSON.stringify(error));
 
       setSubmissions((data ?? []) as Submission[]);
 
@@ -289,7 +323,9 @@ export default function AdminScreen() {
       } else {
         setPendingCount((data ?? []).length);
       }
-    } catch {}
+    } catch (e: any) {
+      console.error('ADMIN FETCH ERROR:', e?.message);
+    }
     setLoading(false);
   }, []);
 

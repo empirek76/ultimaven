@@ -291,13 +291,25 @@ export default function CreatorSubmitScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!profile || !videoUri || !selectedTrack || !selectedLB) return;
+    console.error('SUBMIT STARTED - videoTab:', videoTab, 'youtube_url:', youtubeUrl, 'track:', selectedTrack, 'lb:', selectedLB);
+
+    if (!profile || !selectedTrack || !selectedLB) {
+      console.error('SUBMIT BLOCKED - missing:', { profile: !!profile, selectedTrack, selectedLB });
+      return;
+    }
+    if (videoTab === 'upload' && !videoUri) {
+      console.error('SUBMIT BLOCKED - upload tab but no videoUri');
+      return;
+    }
+    if (videoTab === 'youtube' && !youtubeId) {
+      console.error('SUBMIT BLOCKED - youtube tab but no youtubeId extracted from:', youtubeUrl);
+      return;
+    }
+
     setUploading(true);
     setUploadProgress(0);
     setUploadPhase('converting');
 
-    // Ceiling-based simulation: interval can only advance up to simCeiling.current.
-    // Each real phase unlocks the ceiling — progress never stalls permanently.
     const simCeiling = { current: 10 };
     const simInterval = setInterval(() => {
       setUploadProgress((p) => {
@@ -312,12 +324,10 @@ export default function CreatorSubmitScreen() {
       let videoPath: string | undefined;
 
       if (videoTab === 'youtube') {
-        // YouTube path — no file upload, jump straight to saving
         simCeiling.current = 95;
         setUploadPhase('saving');
         setUploadProgress(90);
       } else {
-        // File upload path — Phase 1: 0→10% converting, Phase 2: 10→88% uploading
         videoPath = await uploadLBVideo(
           videoUri!, selectedTrack, selectedLB, profile.id,
           (phase) => {
@@ -327,7 +337,6 @@ export default function CreatorSubmitScreen() {
             if (phase === 'converting') simCeiling.current = 10;
           },
         );
-        // Upload done — advance to saving phase
         simCeiling.current = 95;
         setUploadPhase('saving');
         setUploadProgress((p) => Math.max(p, 90));
@@ -338,7 +347,7 @@ export default function CreatorSubmitScreen() {
         thumbnailPath = await uploadThumbnail(thumbUri, selectedTrack, selectedLB);
       }
 
-      const { error: insertError } = await supabase.from('lb_submissions').insert({
+      const insertPayload = {
         creator_id:       profile.id,
         track_id:         selectedTrack,
         lb_number:        selectedLB,
@@ -349,12 +358,16 @@ export default function CreatorSubmitScreen() {
         youtube_url:      videoTab === 'youtube' ? youtubeUrl.trim() : null,
         thumbnail_path:   thumbnailPath ?? null,
         duration_seconds: videoTab === 'upload' ? Math.round(videoDurationS) : null,
-      });
+      };
+      console.error('INSERTING TO lb_submissions:', JSON.stringify(insertPayload));
 
-      if (insertError) {
-        console.error('INSERT ERROR:', JSON.stringify(insertError));
-        throw new Error(insertError.message);
-      }
+      const { data: insertData, error: insertError } = await supabase
+        .from('lb_submissions')
+        .insert(insertPayload)
+        .select();
+      console.error('INSERT RESULT - data:', JSON.stringify(insertData), 'error:', JSON.stringify(insertError));
+
+      if (insertError) throw new Error(insertError.message);
 
       clearInterval(simInterval);
       setUploadProgress(100);
@@ -362,11 +375,8 @@ export default function CreatorSubmitScreen() {
       setSuccess(true);
     } catch (err: any) {
       clearInterval(simInterval);
-      console.error('SUBMIT FAILED:', err?.message ?? err);
-      Alert.alert(
-        'Upload failed',
-        err?.message ?? 'Something went wrong. Check Terminal for details.',
-      );
+      console.error('SUBMIT ERROR:', err?.message, err?.stack);
+      Alert.alert('Upload failed', err?.message ?? 'Something went wrong. Check Terminal for details.');
     } finally {
       setUploading(false);
     }
