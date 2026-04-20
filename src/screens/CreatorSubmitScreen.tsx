@@ -29,12 +29,18 @@ const MAX_VIDEO_BYTES   = 500 * 1024 * 1024; // 500 MB
 
 const ALLOWED_MIME_TYPES = ['video/mp4', 'video/quicktime', 'video/mov'];
 
-function getPhaseLabel(progress: number): string {
-  if (progress < 30) return 'Preparing video...';
-  if (progress < 70) return 'Uploading...';
-  if (progress < 90) return 'Processing...';
-  return 'Almost done...';
+function getYouTubeId(url: string): string | null {
+  const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
+  return match ? match[1] : null;
 }
+
+const PHASE_LABELS: Record<string, string> = {
+  converting: 'Converting video...',
+  uploading:  'Uploading...',
+  retrying:   'Retrying upload...',
+  saving:     'Saving...',
+  done:       'Done!',
+};
 
 // ─── Step indicator ────────────────────────────────────────────────────────────
 
@@ -114,10 +120,10 @@ const fieldStyles = StyleSheet.create({
 
 // ─── Upload progress bar ───────────────────────────────────────────────────────
 
-function UploadProgressBar({ progress }: { progress: number }) {
+function UploadProgressBar({ progress, phase }: { progress: number; phase: string }) {
   const { colors } = useTheme();
   const anim  = useRef(new Animated.Value(0)).current;
-  const label = getPhaseLabel(progress);
+  const label = PHASE_LABELS[phase] ?? phase;
 
   useEffect(() => {
     Animated.timing(anim, { toValue: progress, duration: 250, useNativeDriver: false }).start();
@@ -186,13 +192,17 @@ export default function CreatorSubmitScreen() {
   const [lbTitle,       setLbTitle]       = useState('');
   const [lbDesc,        setLbDesc]        = useState('');
   const [lbOutcome,     setLbOutcome]     = useState('');
-  const [videoUri,       setVideoUri]       = useState<string | null>(null);
+  const [videoTab,       setVideoTab]        = useState<'youtube' | 'upload'>('youtube');
+  const [youtubeUrl,     setYoutubeUrl]      = useState('');
+  const [youtubeId,      setYoutubeId]       = useState<string | null>(null);
+  const [videoUri,       setVideoUri]        = useState<string | null>(null);
   const [videoDurationS, setVideoDurationS]  = useState(0);
   const [videoFileSize,  setVideoFileSize]   = useState(0);
   const [videoMimeType,  setVideoMimeType]   = useState('video/mp4');
-  const [thumbUri,       setThumbUri]       = useState<string | null>(null);
+  const [thumbUri,       setThumbUri]        = useState<string | null>(null);
   const [uploading,      setUploading]      = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadPhase,    setUploadPhase]    = useState('converting');
   const [success,        setSuccess]        = useState(false);
 
   const track = TRACKS.find((t) => t.id === selectedTrack);
@@ -214,7 +224,10 @@ export default function CreatorSubmitScreen() {
     if (step === 1) return !!selectedTrack;
     if (step === 2) return selectedLB !== null;
     if (step === 3) return lbTitle.trim().length > 2 && lbDesc.trim().length > 2 && lbOutcome.trim().length > 2;
-    if (step === 4) return !!videoUri && videoDurationS <= MAX_VIDEO_SECONDS;
+    if (step === 4) {
+      if (videoTab === 'youtube') return !!youtubeId;
+      return !!videoUri && videoDurationS <= MAX_VIDEO_SECONDS;
+    }
     return true;
   };
 
@@ -222,9 +235,9 @@ export default function CreatorSubmitScreen() {
     const opts: ImagePicker.ImagePickerOptions = {
       mediaTypes: 'videos' as ImagePicker.MediaType,
       allowsEditing: true,
-      quality: 0.5,
+      quality: 0.7,
       videoMaxDuration: MAX_VIDEO_SECONDS,
-      videoExportPreset: ImagePicker.VideoExportPreset.H264_960x540,
+      videoExportPreset: ImagePicker.VideoExportPreset.H264_1280x720,
     };
 
     const result = fromCamera
@@ -281,29 +294,49 @@ export default function CreatorSubmitScreen() {
     if (!profile || !videoUri || !selectedTrack || !selectedLB) return;
     setUploading(true);
     setUploadProgress(0);
+    setUploadPhase('converting');
 
-    // Phase-driven progress: ramps fast to 30, slower to 70, crawls to 90, stops.
-    const progressInterval = setInterval(() => {
+    // Ceiling-based simulation: interval can only advance up to simCeiling.current.
+    // Each real phase unlocks the ceiling — progress never stalls permanently.
+    const simCeiling = { current: 10 };
+    const simInterval = setInterval(() => {
       setUploadProgress((p) => {
-        if (p < 30) return Math.min(p + 6,  30);
-        if (p < 70) return Math.min(p + 2.5, 70);
-        if (p < 90) return Math.min(p + 0.8, 90);
-        return p;
+        const ceil = simCeiling.current;
+        if (p >= ceil) return p;
+        const step = p < 10 ? 2 : p < 50 ? 1.2 : 0.5;
+        return Math.min(p + step, ceil);
       });
-    }, 200);
+    }, 150);
 
     try {
-      const videoPath = await uploadLBVideo(
-        videoUri, selectedTrack, selectedLB, profile.id, videoMimeType,
-      );
+      let videoPath: string | undefined;
+
+      if (videoTab === 'youtube') {
+        // YouTube path — no file upload, jump straight to saving
+        simCeiling.current = 95;
+        setUploadPhase('saving');
+        setUploadProgress(90);
+      } else {
+        // File upload path — Phase 1: 0→10% converting, Phase 2: 10→88% uploading
+        videoPath = await uploadLBVideo(
+          videoUri!, selectedTrack, selectedLB, profile.id,
+          (phase) => {
+            setUploadPhase(phase);
+            if (phase === 'uploading')  simCeiling.current = 88;
+            if (phase === 'retrying')   simCeiling.current = 50;
+            if (phase === 'converting') simCeiling.current = 10;
+          },
+        );
+        // Upload done — advance to saving phase
+        simCeiling.current = 95;
+        setUploadPhase('saving');
+        setUploadProgress((p) => Math.max(p, 90));
+      }
 
       let thumbnailPath: string | undefined;
       if (thumbUri) {
         thumbnailPath = await uploadThumbnail(thumbUri, selectedTrack, selectedLB);
       }
-
-      clearInterval(progressInterval);
-      setUploadProgress(100);
 
       const { error: insertError } = await supabase.from('lb_submissions').insert({
         creator_id:       profile.id,
@@ -312,9 +345,10 @@ export default function CreatorSubmitScreen() {
         lb_title:         lbTitle.trim(),
         lb_description:   lbDesc.trim(),
         lb_outcome:       lbOutcome.trim(),
-        video_path:       videoPath,
+        video_path:       videoPath ?? null,
+        youtube_url:      videoTab === 'youtube' ? youtubeUrl.trim() : null,
         thumbnail_path:   thumbnailPath ?? null,
-        duration_seconds: Math.round(videoDurationS),
+        duration_seconds: videoTab === 'upload' ? Math.round(videoDurationS) : null,
       });
 
       if (insertError) {
@@ -322,9 +356,12 @@ export default function CreatorSubmitScreen() {
         throw new Error(insertError.message);
       }
 
+      clearInterval(simInterval);
+      setUploadProgress(100);
+      setUploadPhase('done');
       setSuccess(true);
     } catch (err: any) {
-      clearInterval(progressInterval);
+      clearInterval(simInterval);
       console.error('SUBMIT FAILED:', err?.message ?? err);
       Alert.alert(
         'Upload failed',
@@ -454,54 +491,126 @@ export default function CreatorSubmitScreen() {
 
           {step === 4 && (
             <View>
-              <Text style={styles.stepTitle}>Upload Your Video</Text>
-              <Text style={styles.stepSub}>Max 3 minutes · MP4 or MOV</Text>
+              <Text style={styles.stepTitle}>Add Your Video</Text>
+              <Text style={styles.stepSub}>YouTube link (recommended) or upload a file</Text>
 
-              {!videoUri ? (
-                <View style={[styles.uploadZone, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <Ionicons name="videocam-outline" size={44} color={colors.textSecondary} />
-                  <Text style={[styles.uploadZoneHint, { color: colors.textSecondary }]}>No video selected</Text>
-                  <View style={styles.uploadBtnsCol}>
-                    <TouchableOpacity
-                      style={[styles.uploadBtn, { backgroundColor: colors.primary }]}
-                      onPress={() => pickVideo(true)}
-                      activeOpacity={0.82}
-                    >
-                      <Ionicons name="camera-outline" size={18} color="#FFF" />
-                      <Text style={styles.uploadBtnTxt}>Record Video Now 📹</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.uploadBtn, styles.uploadBtnOutline, { borderColor: colors.primary }]}
-                      onPress={() => pickVideo(false)}
-                      activeOpacity={0.82}
-                    >
-                      <Ionicons name="phone-portrait-outline" size={18} color={colors.primaryLight} />
-                      <Text style={[styles.uploadBtnTxt, { color: colors.primaryLight }]}>Choose from Library 📱</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ) : (
-                <View style={[styles.videoPreview, { backgroundColor: colors.card, borderColor: videoDurationS > MAX_VIDEO_SECONDS ? colors.coral : colors.primary }]}>
-                  <Ionicons name="checkmark-circle" size={28} color={videoDurationS > MAX_VIDEO_SECONDS ? colors.coral : colors.green} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.videoPreviewName, { color: colors.text }]} numberOfLines={1}>
-                      {videoMimeType === 'video/quicktime' ? 'MOV' : 'MP4'} · {(videoFileSize / (1024 * 1024)).toFixed(1)} MB
+              {/* ── Tab toggle ── */}
+              <View style={[styles.videoTabBar, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+                {(['youtube', 'upload'] as const).map((tab) => (
+                  <TouchableOpacity
+                    key={tab}
+                    style={[styles.videoTab, videoTab === tab && { backgroundColor: colors.card, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 }]}
+                    onPress={() => setVideoTab(tab)}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[styles.videoTabTxt, { color: videoTab === tab ? colors.text : colors.textSecondary }]}>
+                      {tab === 'youtube' ? '▶  YouTube Link' : '⬆  Upload Video'}
                     </Text>
-                    <Text style={[styles.videoPreviewDur, { color: videoDurationS > MAX_VIDEO_SECONDS ? colors.coral : colors.textSecondary }]}>
-                      {Math.floor(videoDurationS / 60)}:{String(Math.round(videoDurationS % 60)).padStart(2, '0')}
-                      {videoDurationS > MAX_VIDEO_SECONDS && ' — too long!'}
-                    </Text>
-                  </View>
-                  <TouchableOpacity onPress={() => { setVideoUri(null); setVideoDurationS(0); setVideoFileSize(0); setVideoMimeType('video/mp4'); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Ionicons name="close-circle" size={22} color={colors.textSecondary} />
+                    {tab === 'youtube' && videoTab === 'youtube' && (
+                      <View style={[styles.recBadge, { backgroundColor: colors.primary }]}>
+                        <Text style={styles.recBadgeTxt}>Recommended</Text>
+                      </View>
+                    )}
                   </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* ── YouTube tab ── */}
+              {videoTab === 'youtube' && (
+                <View style={styles.ytWrap}>
+                  <View style={[styles.ytInputRow, { backgroundColor: colors.card, borderColor: youtubeId ? colors.primary : colors.border }]}>
+                    <Ionicons name="logo-youtube" size={20} color="#FF0000" />
+                    <TextInput
+                      style={[styles.ytInput, { color: colors.text }]}
+                      value={youtubeUrl}
+                      onChangeText={(t) => { setYoutubeUrl(t); setYoutubeId(getYouTubeId(t)); }}
+                      placeholder="https://youtube.com/watch?v=..."
+                      placeholderTextColor={colors.textSecondary}
+                      autoCapitalize="none"
+                      keyboardType="url"
+                      autoCorrect={false}
+                    />
+                    {youtubeId && <Ionicons name="checkmark-circle" size={18} color={colors.green} />}
+                  </View>
+
+                  {youtubeId ? (
+                    <View style={styles.ytPreviewWrap}>
+                      <Image
+                        source={{ uri: `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg` }}
+                        style={styles.ytThumb}
+                        resizeMode="cover"
+                      />
+                      <View style={[styles.ytPreviewBadge, { backgroundColor: colors.surface }]}>
+                        <Ionicons name="checkmark-circle" size={13} color={colors.green} />
+                        <Text style={[styles.ytPreviewBadgeTxt, { color: colors.green }]}>YouTube video detected</Text>
+                      </View>
+                    </View>
+                  ) : null}
+
+                  <View style={[styles.ytHelper, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Ionicons name="information-circle-outline" size={15} color={colors.primaryLight} />
+                    <Text style={[styles.ytHelperTxt, { color: colors.textSecondary }]}>
+                      Upload your video to YouTube as <Text style={{ color: colors.text, fontFamily: 'Poppins_600SemiBold' }}>Unlisted</Text>, then paste the link here. This is the recommended method — no file size limits, instant playback.
+                    </Text>
+                  </View>
                 </View>
               )}
 
-              {videoDurationS > MAX_VIDEO_SECONDS && (
-                <View style={[styles.errorBox, { backgroundColor: colors.coral + '15', borderColor: colors.coral + '40' }]}>
-                  <Ionicons name="warning-outline" size={16} color={colors.coral} />
-                  <Text style={[styles.errorTxt, { color: colors.coral }]}>Video must be under 3 minutes. Please trim or choose a shorter clip.</Text>
+              {/* ── Upload tab ── */}
+              {videoTab === 'upload' && (
+                <View>
+                  <View style={[styles.uploadNote, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Ionicons name="phone-portrait-outline" size={14} color={colors.textSecondary} />
+                    <Text style={[styles.uploadNoteTxt, { color: colors.textSecondary }]}>Best used on a real iPhone, not the simulator</Text>
+                  </View>
+
+                  {!videoUri ? (
+                    <View style={[styles.uploadZone, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                      <Ionicons name="videocam-outline" size={44} color={colors.textSecondary} />
+                      <Text style={[styles.uploadZoneHint, { color: colors.textSecondary }]}>No video selected</Text>
+                      <View style={styles.uploadBtnsCol}>
+                        <TouchableOpacity
+                          style={[styles.uploadBtn, { backgroundColor: colors.primary }]}
+                          onPress={() => pickVideo(true)}
+                          activeOpacity={0.82}
+                        >
+                          <Ionicons name="camera-outline" size={18} color="#FFF" />
+                          <Text style={styles.uploadBtnTxt}>Record Video Now 📹</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.uploadBtn, styles.uploadBtnOutline, { borderColor: colors.primary }]}
+                          onPress={() => pickVideo(false)}
+                          activeOpacity={0.82}
+                        >
+                          <Ionicons name="phone-portrait-outline" size={18} color={colors.primaryLight} />
+                          <Text style={[styles.uploadBtnTxt, { color: colors.primaryLight }]}>Choose from Library 📱</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={[styles.videoPreview, { backgroundColor: colors.card, borderColor: videoDurationS > MAX_VIDEO_SECONDS ? colors.coral : colors.primary }]}>
+                      <Ionicons name="checkmark-circle" size={28} color={videoDurationS > MAX_VIDEO_SECONDS ? colors.coral : colors.green} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.videoPreviewName, { color: colors.text }]} numberOfLines={1}>
+                          {videoMimeType === 'video/quicktime' ? 'MOV' : 'MP4'} · {(videoFileSize / (1024 * 1024)).toFixed(1)} MB
+                        </Text>
+                        <Text style={[styles.videoPreviewDur, { color: videoDurationS > MAX_VIDEO_SECONDS ? colors.coral : colors.textSecondary }]}>
+                          {Math.floor(videoDurationS / 60)}:{String(Math.round(videoDurationS % 60)).padStart(2, '0')}
+                          {videoDurationS > MAX_VIDEO_SECONDS && ' — too long!'}
+                        </Text>
+                      </View>
+                      <TouchableOpacity onPress={() => { setVideoUri(null); setVideoDurationS(0); setVideoFileSize(0); setVideoMimeType('video/mp4'); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Ionicons name="close-circle" size={22} color={colors.textSecondary} />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {videoDurationS > MAX_VIDEO_SECONDS && (
+                    <View style={[styles.errorBox, { backgroundColor: colors.coral + '15', borderColor: colors.coral + '40' }]}>
+                      <Ionicons name="warning-outline" size={16} color={colors.coral} />
+                      <Text style={[styles.errorTxt, { color: colors.coral }]}>Video must be under 3 minutes. Please trim or choose a shorter clip.</Text>
+                    </View>
+                  )}
                 </View>
               )}
             </View>
@@ -544,7 +653,7 @@ export default function CreatorSubmitScreen() {
               </TouchableOpacity>
 
               {uploading ? (
-                <UploadProgressBar progress={uploadProgress} />
+                <UploadProgressBar progress={uploadProgress} phase={uploadPhase} />
               ) : (
                 <TouchableOpacity style={styles.submitRow} onPress={handleSubmit} activeOpacity={0.84}>
                   <LinearGradient colors={['#7C5CFF', '#6C47FF', '#5A35FF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.submitBtn}>
@@ -618,6 +727,28 @@ function makeStyles(c: ThemeColors) {
     },
     lbCellNum: { fontSize: 15, fontFamily: 'Poppins_700Bold' },
     lbCellSub: { fontSize: 8,  fontFamily: 'Poppins_400Regular', marginTop: 1 },
+
+    // Video tab toggle
+    videoTabBar:  { flexDirection: 'row', borderRadius: 14, padding: 4, borderWidth: 1, marginBottom: 18, gap: 4 },
+    videoTab:     { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 11, paddingVertical: 10, paddingHorizontal: 6 },
+    videoTabTxt:  { fontSize: 12.5, fontFamily: 'Poppins_600SemiBold' },
+    recBadge:     { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
+    recBadgeTxt:  { fontSize: 9, fontFamily: 'Poppins_700Bold', color: '#FFF' },
+
+    // YouTube tab
+    ytWrap:           { gap: 14 },
+    ytInputRow:       { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 14, borderWidth: 1.5, paddingHorizontal: 14, paddingVertical: 13 },
+    ytInput:          { flex: 1, fontSize: 13.5, fontFamily: 'Poppins_400Regular' },
+    ytPreviewWrap:    { borderRadius: 14, overflow: 'hidden', position: 'relative' },
+    ytThumb:          { width: '100%', aspectRatio: 16/9, borderRadius: 14 },
+    ytPreviewBadge:   { position: 'absolute', bottom: 8, left: 8, flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+    ytPreviewBadgeTxt:{ fontSize: 11, fontFamily: 'Poppins_600SemiBold' },
+    ytHelper:         { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderRadius: 12, borderWidth: 1, padding: 12 },
+    ytHelperTxt:      { flex: 1, fontSize: 12.5, fontFamily: 'Poppins_400Regular', lineHeight: 19 },
+
+    // Upload tab note
+    uploadNote:    { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 14 },
+    uploadNoteTxt: { fontSize: 12, fontFamily: 'Poppins_400Regular' },
 
     // Upload zone
     uploadZone:     { borderRadius: 20, borderWidth: 1.5, borderStyle: 'dashed', padding: 36, alignItems: 'center', gap: 12, marginBottom: 12 },

@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackScreenProps, NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Video, ResizeMode } from 'expo-av';
+import { WebView } from 'react-native-webview';
 import { RootStackParamList } from '../types/navigation';
 import { useProgress } from '../context/ProgressContext';
 import { useTheme, ThemeColors } from '../context/ThemeContext';
@@ -75,11 +76,17 @@ const QUIZ_DATA: Record<string, Quiz> = {
 
 const VIDEO_HEIGHT = 230;
 
-type VideoZoneState = 'fetching' | 'no_video' | 'ready';
+function getYouTubeId(url: string): string | null {
+  const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
+  return match ? match[1] : null;
+}
+
+type VideoZoneState = 'fetching' | 'no_video' | 'youtube' | 'file';
 
 function VideoPlayer({ trackId, lbNumber, lbTitle }: { trackId: string; lbNumber: number; lbTitle: string }) {
   const [zoneState, setZoneState] = useState<VideoZoneState>('fetching');
   const [videoUrl,  setVideoUrl]  = useState<string | null>(null);
+  const [youtubeId, setYoutubeId] = useState<string | null>(null);
   const [loading,   setLoading]   = useState(false);
   const videoRef = useRef<Video>(null);
 
@@ -89,7 +96,7 @@ function VideoPlayer({ trackId, lbNumber, lbTitle }: { trackId: string; lbNumber
       try {
         const { data } = await supabase
           .from('lb_submissions')
-          .select('video_path')
+          .select('video_path, youtube_url')
           .eq('track_id', trackId)
           .eq('lb_number', lbNumber)
           .eq('status', 'approved')
@@ -98,12 +105,16 @@ function VideoPlayer({ trackId, lbNumber, lbTitle }: { trackId: string; lbNumber
 
         if (!mounted) return;
 
+        if (data?.youtube_url) {
+          const id = getYouTubeId(data.youtube_url);
+          if (id) { setYoutubeId(id); setZoneState('youtube'); return; }
+        }
         if (data?.video_path) {
           const url = getLBVideoUrl(data.video_path);
           console.error('VIDEO URL:', url);
           if (!mounted) return;
           setVideoUrl(url);
-          setZoneState('ready');
+          setZoneState('file');
         } else {
           setZoneState('no_video');
         }
@@ -136,19 +147,33 @@ function VideoPlayer({ trackId, lbNumber, lbTitle }: { trackId: string; lbNumber
     );
   }
 
+  if (zoneState === 'youtube') {
+    return (
+      <View style={videoStyles.playerWrap}>
+        <WebView
+          style={videoStyles.video}
+          source={{ uri: `https://www.youtube.com/embed/${youtubeId}?playsinline=1&rel=0` }}
+          allowsFullscreenVideo
+          mediaPlaybackRequiresUserAction
+          javaScriptEnabled
+        />
+      </View>
+    );
+  }
+
   return (
     <View>
       <View style={videoStyles.playerWrap}>
         <Video
           ref={videoRef}
-          source={{ uri: videoUrl! }}
+          source={{ uri: videoUrl!, overrideFileExtensionAndroid: 'mp4' }}
           style={videoStyles.video}
           resizeMode={ResizeMode.CONTAIN}
           shouldPlay={false}
           isLooping={false}
           useNativeControls
           onLoadStart={() => setLoading(true)}
-          onLoad={() => setLoading(false)}
+          onLoad={() => { setLoading(false); console.error('VIDEO LOADED SUCCESSFULLY'); }}
           onError={(error) => console.error('Video error:', error)}
         />
         {loading && (

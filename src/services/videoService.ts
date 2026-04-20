@@ -5,40 +5,64 @@ const THUMBNAILS_BUCKET = 'lb-thumbnails';
 
 export interface UploadProgress { loaded: number; total: number; percent: number; }
 
+const UPLOAD_TIMEOUT_MS = 90_000;
+
+async function uploadWithTimeout(
+  blob: Blob,
+  path: string,
+  contentType: string,
+  attempt: number,
+): Promise<void> {
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`Upload timeout after ${UPLOAD_TIMEOUT_MS / 1000}s`)), UPLOAD_TIMEOUT_MS)
+  );
+
+  const uploadPromise = supabase.storage
+    .from(VIDEOS_BUCKET)
+    .upload(path, blob, { contentType: 'video/mp4', upsert: true })
+    .then(({ data, error }) => {
+      console.error(`UPLOAD RESULT (attempt ${attempt}) - data:`, JSON.stringify(data), 'error:', JSON.stringify(error));
+      if (error) throw new Error(`Video upload failed: ${error.message}`);
+    });
+
+  return Promise.race([uploadPromise, timeoutPromise]);
+}
+
 /**
  * Uploads a video file to lb-videos/{trackId}/{lbNumber}/{userId}.mp4
- * Converts the local file:// URI to a Blob first (required for React Native).
- * Returns the storage path on success.
+ * Reports phases via onPhase callback so the UI can drive its progress bar.
+ * Retries the upload once on failure before throwing.
  */
 export async function uploadLBVideo(
   fileUri: string,
   trackId: string,
   lbNumber: number,
   userId: string,
-  contentType: string = 'video/mp4',
-  onProgress?: (p: UploadProgress) => void,
+  onPhase?: (phase: 'converting' | 'uploading' | 'retrying') => void,
 ): Promise<string> {
   const path = `${trackId}/${lbNumber}/${userId}.mp4`;
-
   console.error('UPLOADING TO SUPABASE - bucket: lb-videos, path:', path);
 
+  // Phase 1 — convert URI to Blob
+  onPhase?.('converting');
   const response = await fetch(fileUri);
   const blob     = await response.blob();
-  const total    = blob.size;
+  console.error('BLOB TYPE:', blob.type, 'BLOB SIZE:', blob.size, 'bytes', `(${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
 
-  console.error('UPLOAD START - file:', fileUri, 'size:', total, 'type:', contentType);
+  if (blob.size > 100 * 1024 * 1024) {
+    console.error('WARNING: Video is large (>100 MB), upload may take a few minutes');
+  }
 
-  onProgress?.({ loaded: 0, total, percent: 0 });
+  // Phase 2 — upload with timeout, retry once on failure
+  onPhase?.('uploading');
+  try {
+    await uploadWithTimeout(blob, path, 'video/mp4', 1);
+  } catch (firstErr: any) {
+    console.error('UPLOAD ATTEMPT 1 FAILED:', firstErr.message, '— retrying...');
+    onPhase?.('retrying');
+    await uploadWithTimeout(blob, path, 'video/mp4', 2);
+  }
 
-  const { data, error } = await supabase.storage
-    .from(VIDEOS_BUCKET)
-    .upload(path, blob, { contentType: 'video/mp4', upsert: true });
-
-  console.error('UPLOAD RESULT - data:', JSON.stringify(data), 'error:', JSON.stringify(error));
-
-  if (error) throw new Error(`Video upload failed: ${error.message}`);
-
-  onProgress?.({ loaded: total, total, percent: 100 });
   return path;
 }
 
