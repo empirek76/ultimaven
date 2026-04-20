@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -19,10 +19,12 @@ import { CommonActions } from '@react-navigation/native';
 import { RootStackParamList } from '../types/navigation';
 import { startCheckout } from '../services/stripeService';
 import { useAuth } from '../context/AuthContext';
+import { useTheme, ThemeColors } from '../context/ThemeContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Paywall'>;
 
 const { width: SW } = Dimensions.get('window');
+const PLAN_W = (SW - 44 - 10) / 2;
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -53,102 +55,109 @@ function PlanCard({
   selected: boolean;
   onSelect: () => void;
 }) {
+  const { colors } = useTheme();
   const isYearly = plan === 'yearly';
 
   return (
     <TouchableOpacity
       style={[
-        styles.planCard,
-        selected && styles.planCardSelected,
-        isYearly && selected && styles.planCardYearlySelected,
+        planCardStyles.card,
+        { backgroundColor: colors.surface, borderColor: colors.border },
+        selected && { borderColor: colors.primary, shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 14, elevation: 8 },
+        selected && isYearly && { borderColor: colors.primaryLight, shadowColor: colors.primaryLight, shadowOpacity: 0.45 },
       ]}
       onPress={onSelect}
       activeOpacity={0.78}
     >
-      {/* Best value badge */}
       {isYearly && (
-        <View style={styles.bestValueBadge}>
-          <Text style={styles.bestValueTxt}>BEST VALUE · Save 34%</Text>
+        <View style={planCardStyles.bestValueBadge}>
+          <Text style={planCardStyles.bestValueTxt}>BEST VALUE · Save 34%</Text>
         </View>
       )}
 
-      <View style={styles.planDot}>
-        <View style={[styles.planDotInner, selected && styles.planDotInnerSelected]} />
+      <View style={[planCardStyles.dot, { borderColor: colors.border }]}>
+        <View style={[planCardStyles.dotInner, selected && { backgroundColor: colors.primary }]} />
       </View>
 
-      <Text style={[styles.planTitle, selected && styles.planTitleSelected]}>
+      <Text style={[planCardStyles.title, { color: selected ? colors.primaryLight : colors.textSecondary }]}>
         {isYearly ? 'Pro Yearly' : 'Pro Monthly'}
       </Text>
 
-      <View style={styles.planPriceRow}>
-        <Text style={[styles.planCurrency, selected && styles.planPriceSelected]}>$</Text>
-        <Text style={[styles.planPrice, selected && styles.planPriceSelected]}>
-          {isYearly ? '79' : '9.99'}
-        </Text>
+      <View style={planCardStyles.priceRow}>
+        <Text style={[planCardStyles.currency, { color: selected ? colors.primaryLight : colors.textSecondary }]}>$</Text>
+        <Text style={[planCardStyles.price, { color: colors.text }]}>{isYearly ? '79' : '9.99'}</Text>
       </View>
-      <Text style={styles.planPeriod}>/{isYearly ? 'year' : 'month'}</Text>
+      <Text style={[planCardStyles.period, { color: colors.textSecondary }]}>/{isYearly ? 'year' : 'month'}</Text>
 
-      {isYearly && (
-        <Text style={styles.planSavings}>≈ $6.58/month</Text>
-      )}
+      {isYearly && <Text style={planCardStyles.savings}>≈ $6.58/month</Text>}
     </TouchableOpacity>
   );
 }
 
+const planCardStyles = StyleSheet.create({
+  card:           { width: PLAN_W, borderRadius: 20, borderWidth: 1.5, padding: 16, alignItems: 'center', gap: 4, minHeight: 140, justifyContent: 'center' },
+  bestValueBadge: { position: 'absolute', top: -11, backgroundColor: '#FFD93D', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'center' },
+  bestValueTxt:   { color: '#1A0E00', fontSize: 8.5, fontFamily: 'Poppins_700Bold', letterSpacing: 0.4 },
+  dot:            { width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  dotInner:       { width: 10, height: 10, borderRadius: 5, backgroundColor: 'transparent' },
+  title:          { fontSize: 12, fontFamily: 'Poppins_600SemiBold', textAlign: 'center' },
+  priceRow:       { flexDirection: 'row', alignItems: 'flex-start', gap: 1 },
+  currency:       { fontSize: 14, fontFamily: 'Poppins_700Bold', marginTop: 4 },
+  price:          { fontSize: 28, fontFamily: 'Poppins_700Bold', lineHeight: 36 },
+  period:         { fontSize: 11, fontFamily: 'Poppins_400Regular' },
+  savings:        { color: '#3DD68C', fontSize: 10, fontFamily: 'Poppins_600SemiBold', marginTop: 2 },
+});
+
 // ─── Feature row ──────────────────────────────────────────────────────────────
 
 function FeatureRow({ text }: { text: string }) {
+  const { colors } = useTheme();
   return (
-    <View style={styles.featureRow}>
-      <Text style={styles.featureCheck}>✅</Text>
-      <Text style={styles.featureTxt}>{text}</Text>
+    <View style={featureStyles.row}>
+      <Text style={featureStyles.check}>✅</Text>
+      <Text style={[featureStyles.txt, { color: colors.text }]}>{text}</Text>
     </View>
   );
 }
 
+const featureStyles = StyleSheet.create({
+  row:   { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  check: { fontSize: 15, lineHeight: 22 },
+  txt:   { flex: 1, fontSize: 14, fontFamily: 'Poppins_400Regular', lineHeight: 22 },
+});
+
 // ─── Pro+ Modal ───────────────────────────────────────────────────────────────
 
 function ProPlusModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const { colors } = useTheme();
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <TouchableOpacity
-        style={styles.modalOverlay}
-        activeOpacity={1}
-        onPress={onClose}
-      >
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableOpacity style={modalStyles.overlay} activeOpacity={1} onPress={onClose}>
         <TouchableOpacity
-          style={styles.modalSheet}
+          style={[modalStyles.sheet, { backgroundColor: colors.surface, borderTopColor: colors.border }]}
           activeOpacity={1}
           onPress={() => {}}
         >
-          {/* Handle bar */}
-          <View style={styles.sheetHandle} />
+          <View style={[modalStyles.handle, { backgroundColor: colors.border }]} />
 
-          <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>Pro+ Plan</Text>
-            <TouchableOpacity onPress={onClose} style={styles.sheetCloseBtn}>
-              <Ionicons name="close" size={20} color="#6A5A8A" />
+          <View style={modalStyles.header}>
+            <Text style={[modalStyles.title, { color: colors.text }]}>Pro+ Plan</Text>
+            <TouchableOpacity onPress={onClose} style={[modalStyles.closeBtn, { backgroundColor: colors.surface2 }]}>
+              <Ionicons name="close" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
-          {/* Price */}
-          <View style={styles.sheetPriceRow}>
-            <Text style={styles.sheetCurrency}>$</Text>
-            <Text style={styles.sheetPrice}>19.99</Text>
-            <Text style={styles.sheetPeriod}>/month</Text>
+          <View style={modalStyles.priceRow}>
+            <Text style={[modalStyles.currency, { color: colors.primaryLight }]}>$</Text>
+            <Text style={[modalStyles.price, { color: colors.text }]}>19.99</Text>
+            <Text style={[modalStyles.period, { color: colors.textSecondary }]}>/month</Text>
           </View>
-          <Text style={styles.sheetPriceSub}>Everything in Pro, plus:</Text>
+          <Text style={[modalStyles.priceSub, { color: colors.textSecondary }]}>Everything in Pro, plus:</Text>
 
-          {/* Extra features */}
           {PROPLUS_FEATURES.map((f) => (
-            <View key={f} style={styles.featureRow}>
-              <Text style={styles.featureCheck}>⭐</Text>
-              <Text style={styles.featureTxt}>{f}</Text>
+            <View key={f} style={featureStyles.row}>
+              <Text style={featureStyles.check}>⭐</Text>
+              <Text style={[featureStyles.txt, { color: colors.text }]}>{f}</Text>
             </View>
           ))}
 
@@ -157,18 +166,35 @@ function ProPlusModal({ visible, onClose }: { visible: boolean; onClose: () => v
               colors={['#FFD93D', '#FF9F43', '#FF6B6B']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
-              style={styles.sheetCta}
+              style={modalStyles.cta}
             >
-              <Text style={styles.sheetCtaTxt}>Get Pro+ — $19.99/month</Text>
+              <Text style={modalStyles.ctaTxt}>Get Pro+ — $19.99/month</Text>
             </LinearGradient>
           </TouchableOpacity>
 
-          <Text style={styles.sheetNote}>Cancel anytime. Billed monthly.</Text>
+          <Text style={[modalStyles.note, { color: colors.textSecondary }]}>Cancel anytime. Billed monthly.</Text>
         </TouchableOpacity>
       </TouchableOpacity>
     </Modal>
   );
 }
+
+const modalStyles = StyleSheet.create({
+  overlay:  { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'flex-end' },
+  sheet:    { borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 36, borderTopWidth: 1 },
+  handle:   { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
+  header:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+  title:    { fontSize: 20, fontFamily: 'Poppins_700Bold' },
+  closeBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  priceRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 2, marginBottom: 4 },
+  currency: { fontSize: 16, fontFamily: 'Poppins_700Bold', marginBottom: 6 },
+  price:    { fontSize: 38, fontFamily: 'Poppins_700Bold', lineHeight: 48 },
+  period:   { fontSize: 14, fontFamily: 'Poppins_400Regular', marginBottom: 8 },
+  priceSub: { fontSize: 13, fontFamily: 'Poppins_400Regular', marginBottom: 16 },
+  cta:      { borderRadius: 16, paddingVertical: 15, alignItems: 'center' },
+  ctaTxt:   { color: '#1A0800', fontSize: 16, fontFamily: 'Poppins_700Bold', letterSpacing: 0.2 },
+  note:     { fontSize: 11, fontFamily: 'Poppins_400Regular', textAlign: 'center', marginTop: 10 },
+});
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -176,11 +202,13 @@ export default function PaywallScreen({ navigation, route }: Props) {
   const source = route.params?.source;
   const insets = useSafeAreaInsets();
   const { refreshProfile, setIsPro } = useAuth();
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  const [selectedPlan, setSelectedPlan]   = useState<'monthly' | 'yearly'>('yearly');
-  const [showProPlus, setShowProPlus]     = useState(false);
-  const [showFreeMsg, setShowFreeMsg]     = useState(false);
-  const [isProcessing, setIsProcessing]   = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('yearly');
+  const [showProPlus,  setShowProPlus]  = useState(false);
+  const [showFreeMsg,  setShowFreeMsg]  = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const fadeAnim    = useRef(new Animated.Value(0)).current;
   const scaleAnim   = useRef(new Animated.Value(0.94)).current;
@@ -199,20 +227,15 @@ export default function PaywallScreen({ navigation, route }: Props) {
   function handleClose() {
     if (isClosing.current) return;
     isClosing.current = true;
-
     try {
       if (source === 'lb_limit') {
         setShowFreeMsg(true);
         Animated.timing(freeMsgAnim, { toValue: 1, duration: 280, useNativeDriver: true }).start();
-        setTimeout(() => {
-          try { navigation.goBack(); } catch {}
-        }, 2200);
+        setTimeout(() => { try { navigation.goBack(); } catch {} }, 2200);
       } else {
         navigation.goBack();
       }
-    } catch {
-      // Navigation errors fail silently — the screen will be dismissed by the OS
-    }
+    } catch {}
   }
 
   const handlePurchase = async () => {
@@ -221,7 +244,6 @@ export default function PaywallScreen({ navigation, route }: Props) {
     try {
       const result = await startCheckout(selectedPlan);
       if (result === 'success') {
-        // Update isPro instantly so screens unlock before the async profile refresh completes
         setIsPro(true);
         await refreshProfile();
         Alert.alert(
@@ -235,13 +257,8 @@ export default function PaywallScreen({ navigation, route }: Props) {
           }]
         );
       }
-      // 'cancelled' → sheet dismissed, stay on paywall
-    } catch (err: any) {
-      Alert.alert(
-        'Payment Failed',
-        'Please check your card details and try again.',
-        [{ text: 'OK' }]
-      );
+    } catch {
+      Alert.alert('Payment Failed', 'Please check your card details and try again.', [{ text: 'OK' }]);
     } finally {
       setIsProcessing(false);
     }
@@ -253,11 +270,9 @@ export default function PaywallScreen({ navigation, route }: Props) {
 
   return (
     <View style={styles.container}>
-      {/* Background gradient blobs */}
       <View style={styles.blobTL} />
       <View style={styles.blobBR} />
 
-      {/* ── Close button — sits above SafeAreaView, clears notch via insets ── */}
       <TouchableOpacity
         style={[styles.closeBtn, { top: insets.top + 12 }]}
         onPress={handleClose}
@@ -265,46 +280,33 @@ export default function PaywallScreen({ navigation, route }: Props) {
         activeOpacity={0.65}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
-        <Ionicons name="close" size={20} color="#FFFFFF" />
+        <Ionicons name="close" size={20} color={colors.text} />
       </TouchableOpacity>
 
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-
         <Animated.ScrollView
           style={{ opacity: fadeAnim, transform: [{ scale: scaleAnim }] }}
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
         >
-          {/* ── Phoenix ── */}
           <Animated.Text style={[styles.phoenix, { transform: [{ translateY: phoenixY }] }]}>
             🦅
           </Animated.Text>
 
-          {/* ── Headline ── */}
           <Text style={styles.title}>Unlock Your Full Potential</Text>
-          <Text style={styles.subtitle}>
-            Join thousands of learners achieving real mastery
-          </Text>
+          <Text style={styles.subtitle}>Join thousands of learners achieving real mastery</Text>
 
-          {/* ── Plan selector ── */}
           <View style={styles.planRow}>
             <PlanCard plan="monthly" selected={selectedPlan === 'monthly'} onSelect={() => setSelectedPlan('monthly')} />
-            <PlanCard plan="yearly"  selected={selectedPlan === 'yearly'}  onSelect={() => setSelectedPlan('yearly')} />
+            <PlanCard plan="yearly"  selected={selectedPlan === 'yearly'}  onSelect={() => setSelectedPlan('yearly')}  />
           </View>
 
-          {/* ── Features ── */}
           <View style={styles.featuresCard}>
             <Text style={styles.featuresTitle}>Everything in Pro</Text>
             {FEATURES.map((f) => <FeatureRow key={f} text={f} />)}
           </View>
 
-          {/* ── CTA ── */}
-          <TouchableOpacity
-            activeOpacity={0.84}
-            style={styles.ctaWrap}
-            onPress={handlePurchase}
-            disabled={isProcessing}
-          >
+          <TouchableOpacity activeOpacity={0.84} style={styles.ctaWrap} onPress={handlePurchase} disabled={isProcessing}>
             <LinearGradient
               colors={['#9B7AFF', '#7C5CFF', '#5A35FF']}
               start={{ x: 0, y: 0 }}
@@ -320,16 +322,10 @@ export default function PaywallScreen({ navigation, route }: Props) {
 
           <Text style={styles.ctaSub}>{ctaSubtext}</Text>
 
-          {/* ── Pro+ upsell link ── */}
-          <TouchableOpacity
-            style={styles.proPlusLink}
-            onPress={() => setShowProPlus(true)}
-            activeOpacity={0.7}
-          >
+          <TouchableOpacity style={styles.proPlusLink} onPress={() => setShowProPlus(true)} activeOpacity={0.7}>
             <Text style={styles.proPlusTxt}>See Pro+ plans ›</Text>
           </TouchableOpacity>
 
-          {/* ── Footer links ── */}
           <View style={styles.footerRow}>
             <TouchableOpacity activeOpacity={0.65}>
               <Text style={styles.footerLink}>Restore Purchase</Text>
@@ -341,7 +337,6 @@ export default function PaywallScreen({ navigation, route }: Props) {
           </View>
         </Animated.ScrollView>
 
-        {/* ── Free tier message banner (shown on close from lb_limit) ── */}
         {showFreeMsg && (
           <Animated.View style={[styles.freeMsgBanner, { opacity: freeMsgAnim }]}>
             <Text style={styles.freeMsgIcon}>🔓</Text>
@@ -352,10 +347,8 @@ export default function PaywallScreen({ navigation, route }: Props) {
             </Text>
           </Animated.View>
         )}
-
       </SafeAreaView>
 
-      {/* ── Pro+ Modal ── */}
       <ProPlusModal visible={showProPlus} onClose={() => setShowProPlus(false)} />
     </View>
   );
@@ -363,382 +356,57 @@ export default function PaywallScreen({ navigation, route }: Props) {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const PLAN_W = (SW - 44 - 10) / 2; // two cards with 10px gap inside 22px padding
+function makeStyles(c: ThemeColors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.background },
+    safe:      { flex: 1 },
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0D0D1A' },
-  safe:      { flex: 1 },
+    blobTL: { position: 'absolute', width: 360, height: 360, borderRadius: 180, backgroundColor: c.primary, opacity: 0.10, top: -100, left: -100 },
+    blobBR: { position: 'absolute', width: 280, height: 280, borderRadius: 140, backgroundColor: c.primary, opacity: 0.07, bottom: 40, right: -80 },
 
-  blobTL: {
-    position: 'absolute', width: 360, height: 360, borderRadius: 180,
-    backgroundColor: '#7C5CFF', opacity: 0.10, top: -100, left: -100,
-  },
-  blobBR: {
-    position: 'absolute', width: 280, height: 280, borderRadius: 140,
-    backgroundColor: '#5A35FF', opacity: 0.07, bottom: 40, right: -80,
-  },
+    closeBtn: {
+      position: 'absolute', right: 20, zIndex: 100,
+      width: 44, height: 44, borderRadius: 22,
+      backgroundColor: c.surface, borderWidth: 1, borderColor: c.border,
+      alignItems: 'center', justifyContent: 'center',
+    },
 
-  closeBtn: {
-    position: 'absolute',
-    // top is set dynamically via insets.top + 12
-    right: 20,
-    zIndex: 100,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#1E1E38',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+    scroll: { paddingHorizontal: 22, paddingTop: 36, paddingBottom: 32, alignItems: 'center' },
 
-  scroll: {
-    paddingHorizontal: 22,
-    paddingTop: 36,
-    paddingBottom: 32,
-    alignItems: 'center',
-  },
+    phoenix: {
+      fontSize: 72, lineHeight: 88, textAlign: 'center',
+      shadowColor: '#FFD93D', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.9, shadowRadius: 24,
+      marginBottom: 8,
+    },
 
-  // Phoenix
-  phoenix: {
-    fontSize: 72,
-    lineHeight: 88,
-    textAlign: 'center',
-    shadowColor: '#FFD93D',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.9,
-    shadowRadius: 24,
-    marginBottom: 8,
-  },
+    title:    { color: c.text,          fontSize: 26, fontFamily: 'Poppins_700Bold',    textAlign: 'center', lineHeight: 34, marginBottom: 8 },
+    subtitle: { color: c.textSecondary, fontSize: 14, fontFamily: 'Poppins_400Regular', textAlign: 'center', lineHeight: 22, marginBottom: 28, paddingHorizontal: 8 },
 
-  // Headline
-  title: {
-    color: '#FFFFFF',
-    fontSize: 26,
-    fontFamily: 'Poppins_700Bold',
-    textAlign: 'center',
-    lineHeight: 34,
-    marginBottom: 8,
-  },
-  subtitle: {
-    color: '#6A5A8A',
-    fontSize: 14,
-    fontFamily: 'Poppins_400Regular',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 28,
-    paddingHorizontal: 8,
-  },
+    planRow: { flexDirection: 'row', gap: 10, width: '100%', marginBottom: 22 },
 
-  // Plan cards
-  planRow: {
-    flexDirection: 'row',
-    gap: 10,
-    width: '100%',
-    marginBottom: 22,
-  },
-  planCard: {
-    width: PLAN_W,
-    backgroundColor: '#0F0C24',
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: '#2A1A4A',
-    padding: 16,
-    alignItems: 'center',
-    gap: 4,
-    minHeight: 140,
-    justifyContent: 'center',
-  },
-  planCardSelected: {
-    borderColor: '#7C5CFF',
-    backgroundColor: '#130E2E',
-    shadowColor: '#7C5CFF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 14,
-    elevation: 8,
-  },
-  planCardYearlySelected: {
-    borderColor: '#9B7AFF',
-    shadowColor: '#9B7AFF',
-    shadowOpacity: 0.45,
-  },
+    featuresCard:  { width: '100%', backgroundColor: c.card, borderRadius: 20, borderWidth: 1, borderColor: c.border, padding: 20, gap: 12, marginBottom: 24 },
+    featuresTitle: { color: c.textSecondary, fontSize: 11, fontFamily: 'Poppins_700Bold', letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 4 },
 
-  bestValueBadge: {
-    position: 'absolute',
-    top: -11,
-    backgroundColor: '#FFD93D',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    alignSelf: 'center',
-  },
-  bestValueTxt: {
-    color: '#1A0E00',
-    fontSize: 8.5,
-    fontFamily: 'Poppins_700Bold',
-    letterSpacing: 0.4,
-  },
+    ctaWrap: { width: '100%' },
+    ctaBtn:  { borderRadius: 18, paddingVertical: 17, alignItems: 'center', shadowColor: c.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.55, shadowRadius: 20, elevation: 10 },
+    ctaTxt:  { color: '#FFFFFF', fontSize: 17, fontFamily: 'Poppins_700Bold', letterSpacing: 0.3 },
+    ctaSub:  { color: c.textSecondary, fontSize: 12, fontFamily: 'Poppins_400Regular', textAlign: 'center', marginTop: 12, marginBottom: 4 },
 
-  planDot: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 1.5,
-    borderColor: '#3A2A5A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  planDotInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: 'transparent',
-  },
-  planDotInnerSelected: {
-    backgroundColor: '#7C5CFF',
-  },
+    proPlusLink: { paddingVertical: 10, paddingHorizontal: 20, marginBottom: 20 },
+    proPlusTxt:  { color: c.primaryLight, fontSize: 13, fontFamily: 'Poppins_600SemiBold', textAlign: 'center' },
 
-  planTitle: {
-    color: '#6A5A8A',
-    fontSize: 12,
-    fontFamily: 'Poppins_600SemiBold',
-    textAlign: 'center',
-  },
-  planTitleSelected: { color: '#C4B0FF' },
+    footerRow:  { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
+    footerLink: { color: c.textSecondary, fontSize: 12, fontFamily: 'Poppins_400Regular' },
+    footerDot:  { color: c.border,        fontSize: 12 },
 
-  planPriceRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 1 },
-  planCurrency: {
-    color: '#4A3A6A',
-    fontSize: 14,
-    fontFamily: 'Poppins_700Bold',
-    marginTop: 4,
-  },
-  planPrice: {
-    color: '#FFFFFF',
-    fontSize: 28,
-    fontFamily: 'Poppins_700Bold',
-    lineHeight: 36,
-  },
-  planPriceSelected: { color: '#FFFFFF' },
-
-  planPeriod: {
-    color: '#4A3A6A',
-    fontSize: 11,
-    fontFamily: 'Poppins_400Regular',
-  },
-  planSavings: {
-    color: '#3DD68C',
-    fontSize: 10,
-    fontFamily: 'Poppins_600SemiBold',
-    marginTop: 2,
-  },
-
-  // Features card
-  featuresCard: {
-    width: '100%',
-    backgroundColor: '#0D0A1E',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#1E1640',
-    padding: 20,
-    gap: 12,
-    marginBottom: 24,
-  },
-  featuresTitle: {
-    color: '#7A6A9A',
-    fontSize: 11,
-    fontFamily: 'Poppins_700Bold',
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
-    marginBottom: 4,
-  },
-  featureRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  featureCheck: { fontSize: 15, lineHeight: 22 },
-  featureTxt: {
-    flex: 1,
-    color: '#D4C8F0',
-    fontSize: 14,
-    fontFamily: 'Poppins_400Regular',
-    lineHeight: 22,
-  },
-
-  // CTA
-  ctaWrap: { width: '100%' },
-  ctaBtn: {
-    borderRadius: 18,
-    paddingVertical: 17,
-    alignItems: 'center',
-    shadowColor: '#7C5CFF',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.55,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  ctaTxt: {
-    color: '#FFFFFF',
-    fontSize: 17,
-    fontFamily: 'Poppins_700Bold',
-    letterSpacing: 0.3,
-  },
-  ctaSub: {
-    color: '#4A3A6A',
-    fontSize: 12,
-    fontFamily: 'Poppins_400Regular',
-    textAlign: 'center',
-    marginTop: 12,
-    marginBottom: 4,
-  },
-
-  // Pro+ link
-  proPlusLink: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  proPlusTxt: {
-    color: '#9B7AFF',
-    fontSize: 13,
-    fontFamily: 'Poppins_600SemiBold',
-    textAlign: 'center',
-  },
-
-  // Footer
-  footerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 8,
-  },
-  footerLink: {
-    color: '#3A2A5A',
-    fontSize: 12,
-    fontFamily: 'Poppins_400Regular',
-  },
-  footerDot: {
-    color: '#2A1A4A',
-    fontSize: 12,
-  },
-
-  // Free tier message banner
-  freeMsgBanner: {
-    position: 'absolute',
-    bottom: 100,
-    left: 16,
-    right: 16,
-    backgroundColor: '#0D0A1E',
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: '#3D2880',
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    shadowColor: '#7C5CFF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  freeMsgIcon: { fontSize: 20, lineHeight: 26 },
-  freeMsgTxt: {
-    flex: 1,
-    color: '#9A8ABB',
-    fontSize: 13,
-    fontFamily: 'Poppins_400Regular',
-    lineHeight: 20,
-  },
-  freeMsgBold: {
-    color: '#C4B0FF',
-    fontFamily: 'Poppins_600SemiBold',
-  },
-
-  // Pro+ modal sheet
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.72)',
-    justifyContent: 'flex-end',
-  },
-  modalSheet: {
-    backgroundColor: '#0F0C22',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 36,
-    borderTopWidth: 1,
-    borderColor: '#2A1A4A',
-  },
-  sheetHandle: {
-    width: 40, height: 4, borderRadius: 2,
-    backgroundColor: '#2A1A4A',
-    alignSelf: 'center',
-    marginBottom: 20,
-  },
-  sheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  sheetTitle: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontFamily: 'Poppins_700Bold',
-  },
-  sheetCloseBtn: {
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: '#1A1438',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  sheetPriceRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 2,
-    marginBottom: 4,
-  },
-  sheetCurrency: {
-    color: '#9B7AFF', fontSize: 16,
-    fontFamily: 'Poppins_700Bold',
-    marginBottom: 6,
-  },
-  sheetPrice: {
-    color: '#FFFFFF', fontSize: 38,
-    fontFamily: 'Poppins_700Bold',
-    lineHeight: 48,
-  },
-  sheetPeriod: {
-    color: '#6A5A8A', fontSize: 14,
-    fontFamily: 'Poppins_400Regular',
-    marginBottom: 8,
-  },
-  sheetPriceSub: {
-    color: '#6A5A8A',
-    fontSize: 13,
-    fontFamily: 'Poppins_400Regular',
-    marginBottom: 16,
-  },
-  sheetCta: {
-    borderRadius: 16,
-    paddingVertical: 15,
-    alignItems: 'center',
-  },
-  sheetCtaTxt: {
-    color: '#1A0800',
-    fontSize: 16,
-    fontFamily: 'Poppins_700Bold',
-    letterSpacing: 0.2,
-  },
-  sheetNote: {
-    color: '#3A2A5A',
-    fontSize: 11,
-    fontFamily: 'Poppins_400Regular',
-    textAlign: 'center',
-    marginTop: 10,
-  },
-});
+    freeMsgBanner: {
+      position: 'absolute', bottom: 100, left: 16, right: 16,
+      backgroundColor: c.card, borderRadius: 16, borderWidth: 1.5, borderColor: c.border,
+      paddingVertical: 14, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'flex-start', gap: 12,
+      shadowColor: c.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8,
+    },
+    freeMsgIcon: { fontSize: 20, lineHeight: 26 },
+    freeMsgTxt:  { flex: 1, color: c.textSecondary, fontSize: 13, fontFamily: 'Poppins_400Regular', lineHeight: 20 },
+    freeMsgBold: { color: c.primaryLight, fontFamily: 'Poppins_600SemiBold' },
+  });
+}

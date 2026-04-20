@@ -20,6 +20,8 @@ export interface TrackData {
   level: string;
   progressColor: string;
   iconBg: string;
+  iconBgDark: string;
+  iconBgLight: string;
   cardBorder: string;
   sections: TrackSection[];
 }
@@ -54,6 +56,8 @@ export const TRACKS: TrackData[] = [
     level: 'Beginner → Advanced',
     progressColor: '#FF6B6B',
     iconBg: '#2A1018',
+    iconBgDark: '#1A0A1A',
+    iconBgLight: '#F5E6FF',
     cardBorder: '#3A1A22',
     sections: [
       {
@@ -110,6 +114,8 @@ export const TRACKS: TrackData[] = [
     level: 'Beginner → Advanced',
     progressColor: '#3DD68C',
     iconBg: '#0C201A',
+    iconBgDark: '#0C201A',
+    iconBgLight: '#E6F7EE',
     cardBorder: '#143528',
     sections: [
       {
@@ -162,6 +168,8 @@ export const TRACKS: TrackData[] = [
     level: 'All Levels',
     progressColor: '#FF9F43',
     iconBg: '#201508',
+    iconBgDark: '#1A1000',
+    iconBgLight: '#FFF3E6',
     cardBorder: '#2E1E08',
     sections: [
       {
@@ -222,6 +230,8 @@ export const TRACKS: TrackData[] = [
     level: 'Beginner → Advanced',
     progressColor: '#F472B6',
     iconBg: '#200E20',
+    iconBgDark: '#1A0A1A',
+    iconBgLight: '#FFE6F5',
     cardBorder: '#3A1440',
     sections: [
       {
@@ -276,6 +286,8 @@ export const TRACKS: TrackData[] = [
     level: 'Beginner → Advanced',
     progressColor: '#38BDF8',
     iconBg: '#061420',
+    iconBgDark: '#0A1A2A',
+    iconBgLight: '#E6F0FF',
     cardBorder: '#0A2030',
     sections: [
       {

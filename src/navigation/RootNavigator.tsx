@@ -8,6 +8,11 @@ import MainTabNavigator from './MainTabNavigator';
 import PaywallScreen from '../screens/PaywallScreen';
 import NotificationPermissionScreen from '../screens/NotificationPermissionScreen';
 import BlazeChatScreen from '../screens/BlazeChatScreen';
+import CreatorSubmitScreen from '../screens/CreatorSubmitScreen';
+import AdminScreen from '../screens/AdminScreen';
+import MasteryMapScreen from '../screens/MasteryMapScreen';
+import LearningBlockPlayerScreen from '../screens/LearningBlockPlayerScreen';
+import AchievementCelebrationScreen from '../screens/AchievementCelebrationScreen';
 import { RootStackParamList } from '../types/navigation';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -50,6 +55,31 @@ export default function RootNavigator({
           name="BlazeChat"
           component={BlazeChatScreen}
           options={{ animation: 'slide_from_bottom', gestureEnabled: true }}
+        />
+        <Stack.Screen
+          name="CreatorSubmit"
+          component={CreatorSubmitScreen}
+          options={{ animation: 'slide_from_bottom', gestureEnabled: true }}
+        />
+        <Stack.Screen
+          name="AdminPanel"
+          component={AdminScreen}
+          options={{ animation: 'slide_from_right' }}
+        />
+        <Stack.Screen
+          name="MasteryMap"
+          component={MasteryMapScreen}
+          options={{ animation: 'slide_from_right' }}
+        />
+        <Stack.Screen
+          name="LearningBlockPlayer"
+          component={LearningBlockPlayerScreen}
+          options={{ animation: 'slide_from_right' }}
+        />
+        <Stack.Screen
+          name="AchievementCelebration"
+          component={AchievementCelebrationScreen}
+          options={{ animation: 'fade', gestureEnabled: false }}
         />
       </Stack.Navigator>
     </NavigationContainer>

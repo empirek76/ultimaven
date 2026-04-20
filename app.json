@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "ultimaven",
+    "name": "UltiMaven",
     "slug": "ultimaven",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -13,12 +13,15 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true,
+      "bundleIdentifier": "com.ultimaven.app",
+      "supportsTablet": false,
       "infoPlist": {
-        "NSUserNotificationUsageDescription": "Blaze will remind you to keep your streak alive and celebrate your milestones."
+        "NSUserNotificationUsageDescription": "Blaze will remind you to keep your streak alive and celebrate your milestones.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
+      "package": "com.ultimaven.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -38,7 +41,14 @@
           "enableGooglePay": false
         }
       ],
-      "expo-secure-store"
-    ]
+      "expo-secure-store",
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "3e0d5cbd-2995-4613-b48c-5ac3dcba20ca"
+      }
+    },
+    "owner": "empirek"
   }
 }

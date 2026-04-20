@@ -32,6 +32,7 @@ interface ProgressContextValue {
   completeLB: (trackId: string, lbId: number, score?: number) => Promise<void>;
   addTrack: (trackId: string) => Promise<void>;
   refreshActiveTracks: (userId?: string) => Promise<void>;
+  refreshProgress: () => Promise<void>;
 }
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -111,6 +112,14 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
+  const refreshProgress = useCallback(async (): Promise<void> => {
+    if (!user) return;
+    const results = await Promise.all(TRACKS.map((t) => getCompletedLBIds(t.id)));
+    const data: Record<string, number[]> = {};
+    TRACKS.forEach((t, i) => { data[t.id] = results[i]; });
+    setCompletedByTrack(data);
+  }, [user]);
+
   const addTrack = useCallback(async (trackId: string): Promise<void> => {
     if (!user) return;
 
@@ -173,6 +182,7 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
     completeLB,
     addTrack,
     refreshActiveTracks,
+    refreshProgress,
   };
 
   return (

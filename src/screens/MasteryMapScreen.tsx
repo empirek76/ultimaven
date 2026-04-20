@@ -12,15 +12,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { TracksStackParamList, RootStackParamList } from '../types/navigation';
+import { RootStackParamList } from '../types/navigation';
 import { getTrack, getTrackStats } from '../data/tracks';
 import { useProgress } from '../context/ProgressContext';
 import { useAuth } from '../context/AuthContext';
+import { useTheme, ThemeColors } from '../context/ThemeContext';
 import { supabase } from '../services/supabase';
 
 const FREE_LB_LIMIT = 5;
 
-type Props = NativeStackScreenProps<TracksStackParamList, 'MasteryMap'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'MasteryMap'>;
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -41,27 +42,6 @@ interface SectionHeader {
 }
 
 type MapItem = LearningBlock | SectionHeader;
-
-// ─── Color constants ───────────────────────────────────────────────────────
-
-const C = {
-  bg:           '#0D0D1A',
-  card:         '#0E0B20',
-  green:        '#3DD68C',
-  greenDark:    '#0C2218',
-  greenBorder:  '#1A3A28',
-  purple:       '#7C5CFF',
-  purpleLight:  '#9B7AFF',
-  purpleDark:   '#120E2A',
-  purpleBorder: '#4A2EA0',
-  gold:         '#FFD93D',
-  grey:         '#1E1840',
-  greyLine:     '#1C1640',
-  greyNode:     '#1A1438',
-  greyBorder:   '#251E48',
-  greyText:     '#4A3A6A',
-  dimText:      '#3A2A5A',
-};
 
 // ─── Description template ──────────────────────────────────────────────────
 
@@ -85,13 +65,9 @@ function getPrevBlock(items: MapItem[], index: number): LearningBlock | undefine
   return undefined;
 }
 
-function blockLineColor(b: LearningBlock): string {
-  return b.status === 'completed' ? C.green : C.greyLine;
-}
-
 // ─── Active node (pulsing glow) ────────────────────────────────────────────
 
-function ActiveNode({ num }: { num: number }) {
+function ActiveNode({ num, colors }: { num: number; colors: ThemeColors }) {
   const glow = useRef(new Animated.Value(0.15)).current;
 
   useEffect(() => {
@@ -104,187 +80,242 @@ function ActiveNode({ num }: { num: number }) {
   }, []);
 
   return (
-    <View style={styles.activeNodeOuter}>
-      <Animated.View style={[styles.activeGlow, { opacity: glow }]} />
-      <View style={styles.activeCircle}>
-        <Text style={styles.activeCircleText}>{num}</Text>
+    <View style={nodeStyles.activeOuter}>
+      <Animated.View style={[nodeStyles.glow, { opacity: glow, backgroundColor: colors.primary }]} />
+      <View style={[nodeStyles.circle, { backgroundColor: colors.primary }]}>
+        <Text style={nodeStyles.circleText}>{num}</Text>
       </View>
     </View>
   );
 }
 
+const NODE_SIZE = 34;
+const nodeStyles = StyleSheet.create({
+  activeOuter: { width: NODE_SIZE, height: NODE_SIZE, alignItems: 'center', justifyContent: 'center' },
+  glow:        { position: 'absolute', width: 54, height: 54, borderRadius: 27 },
+  circle:      { width: NODE_SIZE, height: NODE_SIZE, borderRadius: NODE_SIZE / 2, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#A882FF', zIndex: 1 },
+  circleText:  { color: '#FFFFFF', fontSize: 13, fontFamily: 'Poppins_700Bold' },
+});
+
 // ─── Node circle ───────────────────────────────────────────────────────────
 
-function NodeCircle({ block, displayNumber }: { block: LearningBlock; displayNumber: number }) {
+function NodeCircle({ block, displayNumber, colors }: { block: LearningBlock; displayNumber: number; colors: ThemeColors }) {
   if (block.status === 'completed') {
     return (
-      <View style={styles.completedNode}>
+      <View style={[nodeStyles2.completed]}>
         <Ionicons name="checkmark" size={17} color="#FFFFFF" />
       </View>
     );
   }
-  if (block.status === 'active') return <ActiveNode num={displayNumber} />;
+  if (block.status === 'active') return <ActiveNode num={displayNumber} colors={colors} />;
   return (
-    <View style={styles.lockedNode}>
-      <Text style={styles.lockEmoji}>🔒</Text>
+    <View style={[nodeStyles2.locked, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+      <Text style={nodeStyles2.lockEmoji}>🔒</Text>
     </View>
   );
 }
+const nodeStyles2 = StyleSheet.create({
+  completed: { width: NODE_SIZE, height: NODE_SIZE, borderRadius: NODE_SIZE / 2, backgroundColor: '#2ECC71', alignItems: 'center', justifyContent: 'center', shadowColor: '#2ECC71', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 8, elevation: 4 },
+  locked:    { width: NODE_SIZE, height: NODE_SIZE, borderRadius: NODE_SIZE / 2, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  lockEmoji: { fontSize: 13 },
+});
 
 // ─── LB card ───────────────────────────────────────────────────────────────
 
-function LBCard({
-  block,
-  displayNumber,
-  isProLocked,
-  onPress,
-}: {
-  block: LearningBlock;
-  displayNumber: number;
-  isProLocked?: boolean;
-  onPress?: () => void;
+function LBCard({ block, displayNumber, isProLocked, onPress, colors }: {
+  block: LearningBlock; displayNumber: number; isProLocked?: boolean; onPress?: () => void; colors: ThemeColors;
 }) {
-  const done   = block.status === 'completed';
-  const active = block.status === 'active';
-  const locked = block.status === 'locked';
-
+  const { isDark } = useTheme();
+  const done    = block.status === 'completed';
+  const active  = block.status === 'active';
+  const locked  = block.status === 'locked';
   const tappable = active || isProLocked;
+
+  // Card background / border per status
+  const cardBg = done   ? (isDark ? 'rgba(107,203,119,0.08)' : '#F0FFF4')
+               : active ? (isDark ? 'rgba(108,71,255,0.12)'  : '#F0EEFF')
+               : locked ? (isDark ? 'rgba(255,255,255,0.03)' : '#F8F8FC')
+               : colors.card;
+
+  const cardBorder = done   ? (isDark ? 'rgba(107,203,119,0.2)' : '#C6F0D0')
+                   : active ? (isDark ? 'rgba(108,71,255,0.4)'  : '#C4B5FD')
+                   : locked ? (isDark ? 'rgba(255,255,255,0.05)': '#E8E8F0')
+                   : colors.border;
+
+  // LB number tag
+  const tagBg       = active && !isProLocked ? (isDark ? colors.surface : '#EEEEFF')
+                    : locked ? (isDark ? '#1E1E38' : '#EEEEFF')
+                    : (isDark ? '#1E1E38' : '#EEEEFF');
+  const tagTxtColor = active && !isProLocked ? colors.primaryLight
+                    : locked ? (isDark ? colors.border : '#C0C0D0')
+                    : (isDark ? '#8B8BAE' : '#6C47FF');
+
+  // Dim title for locked / pro-locked
+  const titleColor  = (locked || isProLocked) ? (isDark ? colors.border : '#C0C0D0') : colors.text;
+
+  // Score badge
+  const scoreBg     = isDark ? '#0C2010' : '#E6F7EE';
+  const scoreBorder  = isDark ? '#1A4A20' : '#B8E6C0';
+  const scoreColor  = isDark ? '#6BCB77'  : '#1A7A3A';
 
   return (
     <TouchableOpacity
       onPress={tappable ? onPress : undefined}
       activeOpacity={tappable ? 0.78 : 1}
       style={[
-        styles.card,
-        done                   && styles.cardDone,
-        active && !isProLocked && styles.cardActive,
-        locked && !isProLocked && styles.cardLocked,
-        isProLocked            && styles.cardProLocked,
+        lbCardStyles.card,
+        { backgroundColor: cardBg, borderColor: cardBorder },
+        done && { borderLeftWidth: 3, borderLeftColor: '#6BCB77' },
+        active && !isProLocked && lbCardStyles.cardActive,
+        locked && !isProLocked && { opacity: 0.52 },
+        isProLocked && { borderColor: isDark ? 'rgba(108,71,255,0.3)' : '#C4B5FD', borderWidth: 1, opacity: 0.85 },
       ]}
     >
-      <View style={styles.cardTop}>
-        <View style={[styles.lbTag, active && !isProLocked && styles.lbTagActive, locked && styles.lbTagLocked]}>
-          <Text style={[styles.lbTagTxt, active && !isProLocked && styles.lbTagTxtActive, locked && styles.lbTagTxtLocked]}>
+      <View style={lbCardStyles.top}>
+        <View style={[lbCardStyles.tag, { backgroundColor: tagBg }]}>
+          <Text style={[lbCardStyles.tagTxt, { color: tagTxtColor }]}>
             LB {displayNumber}
           </Text>
         </View>
-        <Text style={[styles.cardTitle, (locked || isProLocked) && styles.cardTitleLocked]} numberOfLines={2}>
+        <Text style={[lbCardStyles.title, { color: titleColor }]} numberOfLines={2}>
           {block.title}
         </Text>
         {isProLocked && (
-          <View style={styles.proLockBadge}>
-            <Text style={styles.proLockTxt}>PRO</Text>
+          <View style={[lbCardStyles.proBadge, { backgroundColor: colors.surface2, borderColor: colors.primary }]}>
+            <Text style={[lbCardStyles.proBadgeTxt, { color: colors.primaryLight }]}>PRO</Text>
           </View>
         )}
       </View>
 
-      <View style={styles.cardBottom}>
+      <View style={lbCardStyles.bottom}>
         {done && (
           <>
-            <View style={styles.scorePill}>
-              <Text style={styles.scoreText}>
+            <View style={[lbCardStyles.scorePill, { backgroundColor: scoreBg, borderColor: scoreBorder }]}>
+              <Text style={[lbCardStyles.scoreText, { color: scoreColor }]}>
                 {block.score != null && !isNaN(block.score) ? `${Math.round(block.score)}%` : '100%'}
               </Text>
             </View>
-            <Text style={styles.badgeEmoji}>{block.badge}</Text>
+            <Text style={lbCardStyles.badgeEmoji}>{block.badge}</Text>
           </>
         )}
         {active && !isProLocked && (
           <>
-            <View style={styles.inProgressDot} />
-            <Text style={styles.inProgressTxt}>In progress</Text>
-            <View style={styles.playBtn}>
+            <View style={[lbCardStyles.dot, { backgroundColor: colors.primaryLight }]} />
+            <Text style={[lbCardStyles.inProgressTxt, { color: colors.primaryLight }]}>In progress</Text>
+            <View style={[lbCardStyles.playBtn, { backgroundColor: colors.primary }]}>
               <Ionicons name="play" size={13} color="#FFFFFF" />
             </View>
           </>
         )}
         {isProLocked && (
-          <Text style={styles.proLockedTxt}>Unlock with Pro 🔒</Text>
+          <Text style={[lbCardStyles.proLockedTxt, { color: colors.primaryLight }]}>Unlock with Pro 🔒</Text>
         )}
         {locked && !isProLocked && (
-          <Text style={styles.lockedTxt}>Locked · Complete previous lessons</Text>
+          <Text style={[lbCardStyles.lockedTxt, { color: colors.textSecondary }]}>Locked · Complete previous lessons</Text>
         )}
       </View>
     </TouchableOpacity>
   );
 }
+const lbCardStyles = StyleSheet.create({
+  card:         { borderRadius: 16, padding: 14, borderWidth: 1, gap: 10 },
+  cardActive:   { shadowColor: '#7C5CFF', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 6 },
+  top:          { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  tag:          { borderRadius: 7, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start' },
+  tagTxt:       { fontSize: 10, fontFamily: 'Poppins_700Bold', letterSpacing: 0.3 },
+  title:        { flex: 1, fontSize: 14, fontFamily: 'Poppins_600SemiBold', lineHeight: 20 },
+  proBadge:     { borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, borderWidth: 1, alignSelf: 'flex-start' },
+  proBadgeTxt:  { fontSize: 9, fontFamily: 'Poppins_700Bold', letterSpacing: 0.5 },
+  bottom:       { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  scorePill:    { borderRadius: 8, paddingHorizontal: 9, paddingVertical: 3, borderWidth: 1 },
+  scoreText:    { fontSize: 11, fontFamily: 'Poppins_700Bold' },
+  badgeEmoji:   { fontSize: 15 },
+  dot:          { width: 7, height: 7, borderRadius: 3.5 },
+  inProgressTxt:{ fontSize: 12, fontFamily: 'Poppins_600SemiBold', flex: 1 },
+  playBtn:      { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', shadowColor: '#7C5CFF', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.6, shadowRadius: 8, elevation: 4 },
+  proLockedTxt: { fontSize: 11, fontFamily: 'Poppins_600SemiBold' },
+  lockedTxt:    { fontSize: 11, fontFamily: 'Poppins_400Regular' },
+});
 
 // ─── Map rows ──────────────────────────────────────────────────────────────
 
-function BlockRow({
-  block,
-  displayNumber,
-  isProLocked,
-  bottomLineColor,
-  showBottomLine,
-  onPress,
-}: {
-  block: LearningBlock;
-  displayNumber: number;
-  isProLocked?: boolean;
-  bottomLineColor: string;
-  showBottomLine: boolean;
-  onPress?: () => void;
+const NODE_COL = 52;
+
+function BlockRow({ block, displayNumber, isProLocked, bottomLineColor, showBottomLine, onPress, colors }: {
+  block: LearningBlock; displayNumber: number; isProLocked?: boolean;
+  bottomLineColor: string; showBottomLine: boolean; onPress?: () => void; colors: ThemeColors;
 }) {
   return (
-    <View style={styles.mapRow}>
-      <View style={styles.nodeCol}>
-        <NodeCircle block={block} displayNumber={displayNumber} />
-        {showBottomLine && (
-          <View style={[styles.connLine, { backgroundColor: bottomLineColor }]} />
-        )}
+    <View style={rowStyles.mapRow}>
+      <View style={rowStyles.nodeCol}>
+        <NodeCircle block={block} displayNumber={displayNumber} colors={colors} />
+        {showBottomLine && <View style={[rowStyles.connLine, { backgroundColor: bottomLineColor }]} />}
       </View>
-      <View style={styles.cardCol}>
-        <LBCard block={block} displayNumber={displayNumber} isProLocked={isProLocked} onPress={onPress} />
+      <View style={rowStyles.cardCol}>
+        <LBCard block={block} displayNumber={displayNumber} isProLocked={isProLocked} onPress={onPress} colors={colors} />
       </View>
     </View>
   );
 }
 
-function SectionRow({
-  label,
-  lineColor,
-  showLine,
-}: {
-  label: string;
-  lineColor: string;
-  showLine: boolean;
-}) {
+function SectionRow({ label, lineColor, showLine, colors }: { label: string; lineColor: string; showLine: boolean; colors: ThemeColors }) {
+  const { isDark } = useTheme();
+  const labelColor = isDark ? '#6B7280' : '#9CA3AF';
   return (
-    <View style={styles.sectionRow}>
-      <View style={styles.nodeCol}>
-        {showLine && <View style={[styles.sectionLine, { backgroundColor: lineColor }]} />}
+    <View style={rowStyles.sectionRow}>
+      <View style={rowStyles.nodeCol}>
+        {showLine && <View style={[rowStyles.sectionLine, { backgroundColor: lineColor }]} />}
       </View>
-      <View style={styles.sectionContent}>
-        <Text style={styles.sectionLabel}>{label}</Text>
-        <View style={styles.sectionDivider} />
+      <View style={rowStyles.sectionContent}>
+        <Text style={[rowStyles.sectionLabel, { color: labelColor }]}>{label}</Text>
+        <View style={[rowStyles.sectionDivider, { backgroundColor: colors.border }]} />
       </View>
     </View>
   );
 }
+
+const rowStyles = StyleSheet.create({
+  mapRow:       { flexDirection: 'row', alignItems: 'stretch' },
+  nodeCol:      { width: NODE_COL, alignItems: 'center', alignSelf: 'stretch' },
+  cardCol:      { flex: 1, paddingLeft: 10, paddingBottom: 12 },
+  sectionRow:   { flexDirection: 'row', alignItems: 'center', minHeight: 44, marginBottom: 4 },
+  sectionLine:  { flex: 1, width: 2 },
+  sectionContent:{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingLeft: 10, gap: 10 },
+  sectionLabel: { fontSize: 11, fontFamily: 'Poppins_700Bold', letterSpacing: 2.5 },
+  sectionDivider:{ flex: 1, height: 1 },
+  connLine:     { flex: 1, width: 2, minHeight: 12 },
+});
 
 // ─── Stat badge ────────────────────────────────────────────────────────────
 
-function StatBadge({ value, label, color }: { value: string; label: string; color: string }) {
+function StatBadge({ value, label, color, colors }: { value: string; label: string; color: string; colors: ThemeColors }) {
   return (
-    <View style={styles.statBadge}>
-      <Text style={[styles.statVal, { color }]}>{value}</Text>
-      <Text style={styles.statLbl}>{label}</Text>
+    <View style={statStyles.badge}>
+      <Text style={[statStyles.val, { color }]}>{value}</Text>
+      <Text style={[statStyles.lbl, { color: colors.textSecondary }]}>{label}</Text>
     </View>
   );
 }
+const statStyles = StyleSheet.create({
+  badge: { flex: 1, alignItems: 'center' },
+  val:   { fontSize: 16, fontFamily: 'Poppins_700Bold' },
+  lbl:   { fontSize: 10, fontFamily: 'Poppins_400Regular', marginTop: 3 },
+});
 
 // ─── Screen ────────────────────────────────────────────────────────────────
 
 export default function MasteryMapScreen({ navigation, route }: Props) {
-  const fadeAnim  = useRef(new Animated.Value(0)).current;
-  const rootNav   = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const rootNav  = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { colors, isDark } = useTheme();
 
   const track = getTrack(route.params.trackId);
   const { completedByTrack, getTrackCompletedIds } = useProgress();
   const { isPro, user, profileLoading } = useAuth();
 
   const [scoresMap, setScoresMap] = useState<Map<number, number>>(new Map());
+
+  const styles = useMemo(() => makeStyles(colors), [colors]);
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
@@ -323,10 +354,8 @@ export default function MasteryMapScreen({ navigation, route }: Props) {
 
   const mapItems = useMemo((): MapItem[] => {
     if (!track) return [];
-
     const completedSet = getTrackCompletedIds(track.id);
     const allBlocks = track.sections.flatMap((s) => s.blocks);
-
     let foundActive = false;
     const statusMap = new Map<number, BlockStatus>();
     for (const block of allBlocks) {
@@ -339,17 +368,11 @@ export default function MasteryMapScreen({ navigation, route }: Props) {
         statusMap.set(block.id, 'locked');
       }
     }
-
     const result: MapItem[] = [];
     for (const section of track.sections) {
       result.push({ type: 'section', label: section.label });
       for (const block of section.blocks) {
-        result.push({
-          type: 'block',
-          ...block,
-          status: statusMap.get(block.id) ?? block.status,
-          score:  scoresMap.get(block.id),
-        });
+        result.push({ type: 'block', ...block, status: statusMap.get(block.id) ?? block.status, score: scoresMap.get(block.id) });
       }
     }
     return result;
@@ -358,7 +381,7 @@ export default function MasteryMapScreen({ navigation, route }: Props) {
   if (!track) {
     return (
       <View style={styles.container}>
-        <Text style={{ color: '#FFFFFF', padding: 20 }}>Track not found</Text>
+        <Text style={{ color: colors.text, padding: 20 }}>Track not found</Text>
       </View>
     );
   }
@@ -367,24 +390,21 @@ export default function MasteryMapScreen({ navigation, route }: Props) {
     `${!val || isNaN(val) ? 0 : Math.round(val)}%`;
 
   const stats = getTrackStats(track);
-  const completedCount = mapItems.filter(
-    (i) => i.type === 'block' && (i as LearningBlock).status === 'completed'
-  ).length;
-  const lockedCount = Math.max(0, stats.total - completedCount - 1);
-  const masteryRaw = stats.total > 0 ? Math.round((completedCount / stats.total) * 100) : 0;
-  const mastery = Number.isFinite(masteryRaw) ? masteryRaw : 0;
+  const completedCount = mapItems.filter((i) => i.type === 'block' && (i as LearningBlock).status === 'completed').length;
+  const lockedCount    = Math.max(0, stats.total - completedCount - 1);
+  const masteryRaw     = stats.total > 0 ? Math.round((completedCount / stats.total) * 100) : 0;
+  const mastery        = Number.isFinite(masteryRaw) ? masteryRaw : 0;
+
+  const blockLineColor = (b: LearningBlock) =>
+    b.status === 'completed' ? '#6BCB77' : (isDark ? 'rgba(255,255,255,0.06)' : '#E0E0F0');
 
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safe} edges={['top']}>
         {/* ── Header ── */}
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.backBtn}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
+            <Ionicons name="chevron-back" size={24} color={colors.text} />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
             <Text style={styles.headerEmoji}>{track.emoji}</Text>
@@ -396,11 +416,7 @@ export default function MasteryMapScreen({ navigation, route }: Props) {
           <TouchableOpacity
             style={styles.blazeBtn}
             activeOpacity={0.75}
-            onPress={() => rootNav.navigate('BlazeChat', {
-              trackId:    track.id,
-              trackName:  track.name,
-              trackEmoji: track.emoji,
-            })}
+            onPress={() => rootNav.navigate('BlazeChat', { trackId: track.id, trackName: track.name, trackEmoji: track.emoji })}
           >
             <Text style={styles.blazeBtnEmoji}>🦅</Text>
           </TouchableOpacity>
@@ -412,38 +428,42 @@ export default function MasteryMapScreen({ navigation, route }: Props) {
           style={{ opacity: fadeAnim }}
         >
           {/* ── Progress summary ── */}
-          <View style={styles.statsCard}>
-            <StatBadge value={String(completedCount)} label="Completed" color={C.purple}  />
+          <View style={[
+            styles.statsCard,
+            { borderColor: isDark ? 'rgba(255,255,255,0.05)' : '#E8E8F5' },
+            !isDark && { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3 },
+          ]}>
+            <StatBadge value={String(completedCount)} label="Completed" color={colors.primary}       colors={colors} />
             <View style={styles.statSep} />
-            <StatBadge value="1"                       label="Active"    color={C.gold}    />
+            <StatBadge value="1"                       label="Active"    color={colors.gold}          colors={colors} />
             <View style={styles.statSep} />
-            <StatBadge value={String(lockedCount)}     label="Locked"    color={C.greyText}/>
+            <StatBadge value={String(lockedCount)}     label="Locked"    color={colors.textSecondary} colors={colors} />
             <View style={styles.statSep} />
-            <StatBadge value={safePercent(mastery)}     label="Mastery"   color={C.green}   />
+            <StatBadge value={safePercent(mastery)}    label="Mastery"   color="#3DD68C"              colors={colors} />
           </View>
 
           {/* ── Mastery map ── */}
-          <View style={styles.mapContainer}>
+          <View>
             {mapItems.map((item, index) => {
               const isLast  = index === mapItems.length - 1;
               const prevBlk = getPrevBlock(mapItems, index);
 
               if (item.type === 'section') {
-                const lineColor = prevBlk ? blockLineColor(prevBlk) : C.greyLine;
+                const lineColor = prevBlk ? blockLineColor(prevBlk) : colors.border;
                 return (
                   <SectionRow
                     key={`sec-${item.label}`}
                     label={item.label}
                     lineColor={lineColor}
                     showLine={prevBlk !== undefined}
+                    colors={colors}
                   />
                 );
               }
 
               const displayNumber = blockNumberMap.get(item.id) ?? item.id;
-              // Never lock while profile is still loading — avoids false paywall during auth timing
-              const isProLocked  = displayNumber > FREE_LB_LIMIT && !isPro && !profileLoading;
-              const bottomColor  = blockLineColor(item);
+              const isProLocked   = displayNumber > FREE_LB_LIMIT && !isPro && !profileLoading;
+              const bottomColor   = blockLineColor(item);
               return (
                 <BlockRow
                   key={`blk-${item.id}`}
@@ -452,11 +472,9 @@ export default function MasteryMapScreen({ navigation, route }: Props) {
                   isProLocked={isProLocked}
                   bottomLineColor={bottomColor}
                   showBottomLine={!isLast}
+                  colors={colors}
                   onPress={() => {
-                    if (isProLocked) {
-                      rootNav.navigate('Paywall', { source: 'lb_limit' });
-                      return;
-                    }
+                    if (isProLocked) { rootNav.navigate('Paywall', { source: 'lb_limit' }); return; }
                     navigation.navigate('LearningBlockPlayer', {
                       lbId:          item.id,
                       lbTitle:       item.title,
@@ -480,295 +498,27 @@ export default function MasteryMapScreen({ navigation, route }: Props) {
 
 // ─── Styles ────────────────────────────────────────────────────────────────
 
-const NODE_SIZE = 34;
-const NODE_COL  = 52;
+function makeStyles(c: ThemeColors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.background },
+    safe:      { flex: 1 },
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg },
-  safe:      { flex: 1 },
+    header:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
+    backBtn:     { width: 44, height: 44, borderRadius: 14, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: c.border },
+    blazeBtn:    { width: 44, height: 44, borderRadius: 14, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: c.border },
+    blazeBtnEmoji: { fontSize: 20 },
+    headerCenter:  { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, gap: 10 },
+    headerEmoji:   { fontSize: 30 },
+    headerTextCol: { flex: 1 },
+    headerTitle:   { color: c.text, fontSize: 17, fontFamily: 'Poppins_700Bold' },
+    headerSub:     { color: c.textSecondary, fontSize: 11, fontFamily: 'Poppins_400Regular', marginTop: 1 },
 
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: '#1A1438',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#2A1A5A',
-  },
-  blazeBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: '#120E2A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#3A2070',
-  },
-  blazeBtnEmoji: { fontSize: 20 },
-  headerCenter: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    gap: 10,
-  },
-  headerEmoji:   { fontSize: 30 },
-  headerTextCol: { flex: 1 },
-  headerTitle: {
-    color: '#FFFFFF',
-    fontSize: 17,
-    fontFamily: 'Poppins_700Bold',
-  },
-  headerSub: {
-    color: '#4A3A6A',
-    fontSize: 11,
-    fontFamily: 'Poppins_400Regular',
-    marginTop: 1,
-  },
+    scrollContent: { paddingHorizontal: 20, paddingBottom: 40, paddingTop: 4 },
 
-  scrollContent: { paddingHorizontal: 20, paddingBottom: 40, paddingTop: 4 },
-
-  statsCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: C.card,
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 28,
-    borderWidth: 1,
-    borderColor: C.greyBorder,
-  },
-  statBadge: { flex: 1, alignItems: 'center' },
-  statVal: { fontSize: 16, fontFamily: 'Poppins_700Bold' },
-  statLbl: {
-    fontSize: 10,
-    color: C.greyText,
-    fontFamily: 'Poppins_400Regular',
-    marginTop: 3,
-  },
-  statSep: { width: 1, height: 30, backgroundColor: C.greyLine },
-
-  mapContainer: {},
-  mapRow: { flexDirection: 'row', alignItems: 'stretch' },
-  nodeCol: {
-    width: NODE_COL,
-    alignItems: 'center',
-    alignSelf: 'stretch',
-  },
-  cardCol: { flex: 1, paddingLeft: 10, paddingBottom: 12 },
-
-  sectionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 44,
-    marginBottom: 4,
-  },
-  sectionLine: { flex: 1, width: 2 },
-  sectionContent: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingLeft: 10,
-    gap: 10,
-  },
-  sectionLabel: {
-    fontSize: 11,
-    color: C.greyText,
-    fontFamily: 'Poppins_700Bold',
-    letterSpacing: 2.5,
-  },
-  sectionDivider: { flex: 1, height: 1, backgroundColor: C.greyLine },
-
-  connLine: { flex: 1, width: 2, minHeight: 12 },
-
-  completedNode: {
-    width: NODE_SIZE,
-    height: NODE_SIZE,
-    borderRadius: NODE_SIZE / 2,
-    backgroundColor: '#2ECC71',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#2ECC71',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  activeNodeOuter: {
-    width: NODE_SIZE,
-    height: NODE_SIZE,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  activeGlow: {
-    position: 'absolute',
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: C.purple,
-  },
-  activeCircle: {
-    width: NODE_SIZE,
-    height: NODE_SIZE,
-    borderRadius: NODE_SIZE / 2,
-    backgroundColor: C.purple,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#A882FF',
-    zIndex: 1,
-  },
-  activeCircleText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontFamily: 'Poppins_700Bold',
-  },
-  lockedNode: {
-    width: NODE_SIZE,
-    height: NODE_SIZE,
-    borderRadius: NODE_SIZE / 2,
-    backgroundColor: C.greyNode,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: C.greyBorder,
-  },
-  lockEmoji: { fontSize: 13 },
-
-  card: {
-    backgroundColor: C.card,
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: C.greyLine,
-    gap: 10,
-  },
-  cardDone: {
-    borderLeftWidth: 3,
-    borderLeftColor: C.green,
-  },
-  cardActive: {
-    backgroundColor: C.purpleDark,
-    borderColor: C.purpleBorder,
-    shadowColor: C.purple,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  cardLocked: { opacity: 0.52 },
-  cardProLocked: {
-    borderColor: '#3A2080',
-    borderWidth: 1,
-    opacity: 0.85,
-  },
-  proLockBadge: {
-    backgroundColor: '#3A1A8A',
-    borderRadius: 6,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: C.purpleBorder,
-    alignSelf: 'flex-start',
-  },
-  proLockTxt: {
-    color: C.purpleLight,
-    fontSize: 9,
-    fontFamily: 'Poppins_700Bold',
-    letterSpacing: 0.5,
-  },
-  proLockedTxt: {
-    color: C.purpleLight,
-    fontSize: 11,
-    fontFamily: 'Poppins_600SemiBold',
-  },
-
-  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-
-  lbTag: {
-    backgroundColor: C.greyLine,
-    borderRadius: 7,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    alignSelf: 'flex-start',
-  },
-  lbTagActive: { backgroundColor: '#261A52' },
-  lbTagLocked: { backgroundColor: '#131028' },
-  lbTagTxt: {
-    color: C.greyText,
-    fontSize: 10,
-    fontFamily: 'Poppins_700Bold',
-    letterSpacing: 0.3,
-  },
-  lbTagTxtActive: { color: C.purpleLight },
-  lbTagTxtLocked: { color: C.dimText },
-
-  cardTitle: {
-    flex: 1,
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontFamily: 'Poppins_600SemiBold',
-    lineHeight: 20,
-  },
-  cardTitleLocked: { color: '#3A2A5A' },
-
-  cardBottom: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  scorePill: {
-    backgroundColor: C.greenDark,
-    borderRadius: 8,
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderWidth: 1,
-    borderColor: C.greenBorder,
-  },
-  scoreText: {
-    color: C.green,
-    fontSize: 11,
-    fontFamily: 'Poppins_700Bold',
-  },
-  badgeEmoji: { fontSize: 15 },
-
-  inProgressDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: C.purpleLight,
-  },
-  inProgressTxt: {
-    color: C.purpleLight,
-    fontSize: 12,
-    fontFamily: 'Poppins_600SemiBold',
-    flex: 1,
-  },
-  playBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: C.purple,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: C.purple,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.6,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  lockedTxt: {
-    color: C.dimText,
-    fontSize: 11,
-    fontFamily: 'Poppins_400Regular',
-  },
-});
+    statsCard: {
+      flexDirection: 'row', alignItems: 'center', backgroundColor: c.card,
+      borderRadius: 20, padding: 16, marginBottom: 28, borderWidth: 1, borderColor: c.border,
+    },
+    statSep: { width: 1, height: 30, backgroundColor: c.border },
+  });
+}

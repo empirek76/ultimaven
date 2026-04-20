@@ -9,6 +9,7 @@ export interface UserProfile {
   email:             string | null;
   avatar_url:        string | null;
   is_pro:            boolean;
+  is_admin:          boolean;
   pro_since:         string | null;
   streak_count:      number;
   last_session_date: string | null;
@@ -55,6 +56,7 @@ async function fetchProfile(
     email:             userEmail ?? null,
     avatar_url:        null,
     is_pro:            false,
+    is_admin:          false,
     pro_since:         null,
     streak_count:      0,
     last_session_date: null,

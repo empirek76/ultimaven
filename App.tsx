@@ -13,19 +13,14 @@ import { NavigationContainerRef, CommonActions } from '@react-navigation/native'
 import RootNavigator from './src/navigation/RootNavigator';
 import { ProgressProvider } from './src/context/ProgressContext';
 import { AuthProvider } from './src/context/AuthContext';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { RootStackParamList } from './src/types/navigation';
 import { migrateDataVersion } from './src/utils/progress';
 
 const STRIPE_PK = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '';
 
-export default function App() {
-  const [fontsLoaded] = useFonts({
-    Poppins_700Bold,
-    Poppins_600SemiBold,
-    Poppins_400Regular,
-  });
-
-  const navRef = useRef<NavigationContainerRef<RootStackParamList> | null>(null);
+function AppContent({ navRef }: { navRef: React.MutableRefObject<NavigationContainerRef<RootStackParamList> | null> }) {
+  const { isDark } = useTheme();
 
   useEffect(() => {
     void migrateDataVersion();
@@ -49,17 +44,35 @@ export default function App() {
     return () => sub.remove();
   }, []);
 
+  return (
+    <>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <RootNavigator navRef={navRef} />
+    </>
+  );
+}
+
+export default function App() {
+  const [fontsLoaded] = useFonts({
+    Poppins_700Bold,
+    Poppins_600SemiBold,
+    Poppins_400Regular,
+  });
+
+  const navRef = useRef<NavigationContainerRef<RootStackParamList> | null>(null);
+
   if (!fontsLoaded) return null;
 
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <StripeProvider publishableKey={STRIPE_PK} urlScheme="ultimaven">
-          <ProgressProvider>
-            <StatusBar style="light" />
-            <RootNavigator navRef={navRef} />
-          </ProgressProvider>
-        </StripeProvider>
+        <ThemeProvider>
+          <StripeProvider publishableKey={STRIPE_PK} urlScheme="ultimaven">
+            <ProgressProvider>
+              <AppContent navRef={navRef} />
+            </ProgressProvider>
+          </StripeProvider>
+        </ThemeProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );
